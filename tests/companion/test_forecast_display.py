@@ -390,3 +390,72 @@ def test_real_local_endpoint_writer_cli_and_shutdown(tmp_path, monkeypatch):
         server.server_close()
         thread.join(timeout=2)
     assert process is not None and process.poll() is not None
+
+
+# --- pending update marker ---------------------------------------------------
+
+
+def test_pending_marker_is_absent_unless_pending():
+    snap = snapshot.StatusSnapshot("sess-fixture-1", 0.0, "unknown", observed(), "")
+    for width in WIDTHS:
+        assert render(snap, width) == render(snap, width, "")
+        assert "update" not in render(snap, width)
+
+
+def test_pending_marker_rendered_last_when_it_fits():
+    snap = snapshot.StatusSnapshot("sess-fixture-1", 0.0, "unknown", observed(), "")
+    plain, marked = render(snap, 240), render(snap, 240, "1.30.3")
+    assert marked == f"{plain} | update 1.30.3 pending"
+    assert all(len(render(snap, w, "1.30.3")) <= w for w in WIDTHS)
+    assert render(snap, 32, "1.30.3") == render(snap, 32)  # does not fit: never clipped
+
+
+def test_pending_marker_without_data():
+    snap = snapshot.StatusSnapshot("", 0.0, reason="waiting for session")
+    assert render(snap, 80, "1.30.3") == "TokenPak | waiting for session | update 1.30.3 pending"
+
+
+def test_writer_cache_carries_marker_only_when_pending(tmp_path, monkeypatch):
+    cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        worker,
+        "fetch_snapshot",
+        lambda *a, **k: snapshot.StatusSnapshot(
+            "sess-fixture-1", time.time(), "unknown", observed(), ""
+        ),
+    )
+    monkeypatch.setattr(worker, "pending_version", lambda: "")
+    worker.refresh(tmp_path, "http://127.0.0.1:1", "unknown")
+    clean = (tmp_path / "status" / "sess-fixture-1.line").read_text().split("\n", 1)[1]
+    assert "update" not in clean
+    monkeypatch.setattr(worker, "pending_version", lambda: "1.30.3")
+    worker.refresh(tmp_path, "http://127.0.0.1:1", "unknown")
+    marked = (tmp_path / "status" / "sess-fixture-1.line").read_text().split("\n", 1)[1]
+    assert "| update 1.30.3 pending" in marked
+
+
+@pytest.mark.skipif(shutil.which("jq") is None, reason="jq is required by the native reader")
+def test_native_reader_prints_marker_only_when_pending(tmp_path, monkeypatch):
+    cache(monkeypatch, tmp_path)
+    monkeypatch.setattr(
+        worker,
+        "fetch_snapshot",
+        lambda *a, **k: snapshot.StatusSnapshot(
+            "sess-fixture-1", time.time(), "unknown", observed(), ""
+        ),
+    )
+    outputs = {}
+    for label, version in (("clean", ""), ("pending", "1.30.3")):
+        monkeypatch.setattr(worker, "pending_version", lambda v=version: v)
+        worker.refresh(tmp_path, "http://127.0.0.1:1", "unknown")
+        env = {**os.environ, "COLUMNS": "244", "TOKENPAK_COMPANION_SESSION_DIR": str(tmp_path)}
+        outputs[label] = subprocess.run(
+            ["bash", str(NATIVE)],
+            input='{"session_id": "sess-fixture-1"}',
+            capture_output=True,
+            text=True,
+            env=env,
+            stdin=None,
+        ).stdout
+    assert "update" not in outputs["clean"]
+    assert outputs["pending"] == f"{outputs['clean']} | update 1.30.3 pending"

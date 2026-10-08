@@ -10,8 +10,13 @@ from tokenpak.status.snapshot import StatusSnapshot
 WIDTHS = (32, 48, 64, 80, 100, 120, 160, 240)
 
 
-def render(snapshot: StatusSnapshot, columns: int = 80) -> str:
-    """Keep whole fields, estimate labels and guard state; never clip a number."""
+def render(snapshot: StatusSnapshot, columns: int = 80, pending: str = "") -> str:
+    """Keep whole fields, estimate labels and guard state; never clip a number.
+
+    ``pending`` is the version of an update that is installed or staged but not
+    running. It adds a final ``update <version> pending`` field, only when it
+    fits; with no pending update the output is unchanged.
+    """
     identity = snapshot.session_id[:8]
     prefix = f"TP {identity}" if identity else "TokenPak"
     data = snapshot.economics
@@ -53,6 +58,8 @@ def render(snapshot: StatusSnapshot, columns: int = 80) -> str:
             parts.append(f"guard limit ~{runway.turns} turns est")
         else:
             parts.append(f"runway {runway.status.value}")
+    if pending:
+        parts.append(f"update {pending} pending")
     # All external strings are excluded except a validated session identifier.
     # Transliterate shared formatting punctuation, making bytes == terminal columns.
     parts = [p.replace("–", "-").replace("≤", "<=") for p in parts]

@@ -6296,6 +6296,11 @@ def cmd_update(args: CommandArgs) -> int | None:
     core_only = getattr(args, "core_only", False)
     dry_run = getattr(args, "dry_run", False)
 
+    if getattr(args, "update_action", None) == "apply":
+        from tokenpak.cli.commands import update_apply as _update_apply
+
+        return _update_apply.run(args)
+
     if check_status:
         consent = _automatic_update_checks_enabled()
         label = "enabled" if consent is True else "disabled"
@@ -6325,6 +6330,18 @@ def cmd_update(args: CommandArgs) -> int | None:
         else:
             print("✓ Automatic update checks disabled. No automatic PyPI requests will be made.")
         return 0
+
+    # An update that is already staged or installed is applied, not downloaded
+    # again. Local detection only: no network, so it also holds when automatic
+    # update checks are off.
+    if not force:
+        from tokenpak.core.runtime import update_pending as _up
+
+        _found = _up.detect()
+        if _found.pending:
+            print(f"Update pending: {_found.summary()}")
+            print("  Load it when nothing is in use: tokenpak update apply")
+            return None
 
     if dry_run:
         print("🔍 Dry run — showing what would change (no changes applied)\n")
@@ -6816,6 +6833,9 @@ def _build_update_parser(sub: Subparsers) -> None:
         dest="dry_run",
         help="Show what would change without applying",
     )
+    from tokenpak.cli.commands import update_apply as _update_apply
+
+    _update_apply.add_parser(p)
     p.set_defaults(func=cmd_update)
 
 

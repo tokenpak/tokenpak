@@ -10,6 +10,7 @@ import tempfile
 import time
 from pathlib import Path
 
+from tokenpak.core.runtime.update_pending import cached_detect
 from tokenpak.status.binding import current_session, run_dir, valid_session
 from tokenpak.status.display import WIDTHS, render
 from tokenpak.status.snapshot import MAX_AGE, fetch_snapshot
@@ -26,16 +27,30 @@ def atomic_write(path: Path, text: str) -> None:
             os.unlink(name)
 
 
+def pending_version() -> str:
+    """Version of an installed or staged update that is not running yet, else ``""``.
+
+    Cached for a minute, so the writer's roughly two-second refresh adds one
+    loopback ``/health`` read per minute at most. Never raises.
+    """
+    try:
+        found = cached_detect()
+        return found.target or "" if found.pending else ""
+    except Exception:
+        return ""
+
+
 def refresh(directory: Path, proxy: str, routing_mode: str) -> None:
     session = current_session()
     if not session:
         return
     snapshot = fetch_snapshot(session, proxy, routing_mode=routing_mode)
+    pending = pending_version()
     # Cache key is validated by current_session before it reaches any path.
     cache = directory / "status"
     cache.mkdir(mode=0o700, exist_ok=True)
     content = f"{int(snapshot.generated_at + MAX_AGE)}\n"
-    content += "".join(f"{width}|{render(snapshot, width)}\n" for width in WIDTHS)
+    content += "".join(f"{width}|{render(snapshot, width, pending)}\n" for width in WIDTHS)
     atomic_write(cache / f"{session}.line", content)
     atomic_write(cache / f"{session}.json", json.dumps(snapshot.to_dict(), sort_keys=True))
     # /clear can bind a new native session. Keep only this launch's current
