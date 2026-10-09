@@ -13,6 +13,8 @@ Rules, in one place:
 * The legacy tree is never written. SQLite sources are snapshotted into a
   private temporary directory first, so a database with un-checkpointed WAL
   rows is read completely and no ``-wal``/``-shm`` file is touched in place.
+* Symbolic links are never followed or copied through; they are recreated as
+  links with the same target.
 * Nothing is copied byte-for-byte onto a live database. A missing database is
   created from a snapshot through the SQLite backup API; an existing one gets
   rows merged in a transaction.
@@ -47,6 +49,7 @@ SKIP_LOG = "SKIP-log"
 SKIP_RUNTIME = "SKIP-runtime"
 KEEP_LEGACY = "KEEP-legacy-only"
 CONFLICT = "CONFLICT"
+LINK = "LINK"
 
 _SQLITE_MAGIC = b"SQLite format 3\x00"
 _SQLITE_SUFFIXES = (".db", ".sqlite", ".sqlite3")
@@ -464,15 +467,36 @@ def _merge_lines(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
     return Item(rel, MERGE, f"{len(new)} new {_plural(len(new), 'line')}", len(new))
 
 
+def _process_link(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
+    """Recreate a symbolic link in the canonical home. Never follows or copies through it.
+
+    A relative target is resolved against the directory the link sits in and
+    recreated as an absolute link, so it keeps pointing at the same file.
+    """
+    target = os.readlink(src)
+    note = ""
+    if not os.path.isabs(target):
+        target = os.path.normpath(os.path.join(os.path.dirname(src), target))
+        note = " (relative target made absolute)"
+    if os.path.lexists(dest):
+        if dest.is_symlink() and os.readlink(dest) == target:
+            return Item(rel, SKIP_IDENTICAL, f"same link -> {target}")
+        return Item(rel, CONFLICT, "canonical already has a different entry here; link not created")
+    if ctx.apply:
+        _mkdirs(dest.parent, ctx.canonical)
+        os.symlink(target, dest)
+    return Item(rel, LINK, f"-> {target}{note}")
+
+
 def _process(src: Path, dest: Path, rel: str, ctx: _Ctx) -> None:
     from tokenpak import _paths
 
     name = src.name
-    if src.is_symlink():
-        ctx.items.append(Item(rel, SKIP_RUNTIME, "symbolic link not followed"))
-        return
     if _paths.is_runtime_entry(name):
         ctx.items.append(Item(rel, SKIP_RUNTIME, "live process state is not carried over"))
+        return
+    if src.is_symlink():
+        ctx.items.append(_process_link(src, dest, rel, ctx))
         return
     if src.is_dir():
         if dest.exists() and not dest.is_dir():
@@ -775,6 +799,7 @@ __all__ = [
     "COPY",
     "CONFLICT",
     "KEEP_LEGACY",
+    "LINK",
     "MERGE",
     "SKIP_IDENTICAL",
     "Item",

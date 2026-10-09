@@ -143,27 +143,86 @@ _STATE_FILES: frozenset[str] = frozenset(
 #: directory is deliberately absent.
 _MIGRATION_STATE_FILES: frozenset[str] = frozenset(
     {
+        # ledgers and databases
+        "artifacts.db",
         "cost.db",
-        "spend_guard.db",
         "execution_ledger.db",
-        "routing_ledger.db",
+        "memory.db",
+        "metrics.db",
         "registry.db",
-        "update_check.json",
-        "pricing.json",
-        "dashboard_token",
+        "replay.db",
+        "routing_ledger.db",
+        "spend_guard.db",
+        "usage.db",
+        # configuration and credentials
         "budget_config.yaml",
-        "vault.yaml",
+        "credentials.toml",
         "goals.yaml",
-        "goal_state.json",
-        "instruction_table.json",
+        "routes.toml",
+        "routes.yaml",
+        "triggers.json",
+        "triggers.yaml",
+        "vault.yaml",
+        # learned and recorded state
+        "agents.json",
+        "attribution_history.json",
+        "baselines.json",
+        "cache_store.json",
+        "calibration.json",
+        "case_memory.json",
         "compression_dict.json",
         "compression_events.jsonl",
+        "dashboard_token",
         "debug.json",
+        "error_patterns.json",
+        "failure_signatures.json",
+        "goal_state.json",
+        "history.jsonl",
+        "install_id",
+        "instruction_table.json",
+        "learning.json",
+        "memory_promoter.json",
+        "metrics_buffer.jsonl",
+        "openclaw_sessions.json",
+        "precondition_failures.jsonl",
+        "preconditions.json",
+        "pricing.json",
+        "retrieval_watchdog_history.json",
+        "retry_events.jsonl",
+        "scheduled.json",
+        "shadow_observations.jsonl",
+        "stability_scores.json",
+        "trigger_log.json",
+        "update_check.json",
+        "vault_index.json",
+        "workflow_stats.json",
     }
 )
 
 #: Product-owned subdirectories that migration carries beyond the layout set.
-_MIGRATION_STATE_DIRS: frozenset[str] = frozenset({"data"})
+_MIGRATION_STATE_DIRS: frozenset[str] = frozenset(
+    {
+        "artifacts",
+        "cache",
+        "data",
+        "entries",
+        "examples",
+        "fingerprint_cache",
+        "handoffs",
+        "hooks",
+        "macros",
+        "prove",
+        "recipes",
+        "recovery",
+        "retry_state",
+        "runbooks",
+        "skills",
+        "telemetry",
+        "usage_spool",
+        "vault",
+        "workflows",
+    }
+)
 
 #: Entries that are live process state (sockets, locks, pid files, tunnel
 #: control sockets). They describe a running process, so they are never carried
@@ -178,7 +237,7 @@ _RUNTIME_SUFFIXES: tuple[str, ...] = (
     "-shm",
     "-journal",
 )
-_RUNTIME_ENTRIES: frozenset[str] = frozenset({"tunnels", "run", "tmp", "proxy.pid"})
+_RUNTIME_ENTRIES: frozenset[str] = frozenset({"tunnels", "run", "tmp", "locks", "proxy.pid"})
 
 
 def product_state_names() -> frozenset[str]:

@@ -328,3 +328,59 @@ def test_doctor_reports_split_home(homes):
     canonical.mkdir()
     (canonical / "config.yaml").write_text("a: 2\n")
     assert _paths.is_split_home()
+
+
+def _items(capsys):
+    run(apply=False, as_json=True)
+    return {i["path"]: i for i in json.loads(capsys.readouterr().out)["items"]}
+
+
+def test_symlink_is_recreated_not_followed(homes, tmp_path, capsys):
+    legacy, canonical = homes
+    live = tmp_path / "elsewhere" / "live-monitor.db"
+    make_db(
+        live,
+        "CREATE TABLE requests (a TEXT PRIMARY KEY);",
+        [("INSERT INTO requests VALUES ('x')", ())],
+    )
+    (legacy / "monitor.db").symlink_to(live)
+    before = (tree_hash(live.parent), os.readlink(legacy / "monitor.db"))
+    items = _items(capsys)
+    assert items["monitor.db"]["action"] == "LINK"
+    assert not canonical.exists()  # dry run
+    assert run(apply=True) == 0
+    link = canonical / "monitor.db"
+    assert link.is_symlink() and os.readlink(link) == str(live)
+    assert (
+        tree_hash(live.parent),
+        os.readlink(legacy / "monitor.db"),
+    ) == before  # nothing read through
+    capsys.readouterr()
+    items = _items(capsys)
+    assert items["monitor.db"]["action"] == "SKIP-identical"
+
+
+def test_relative_symlink_becomes_absolute(homes, capsys):
+    legacy, canonical = homes
+    (legacy / "data").mkdir()
+    (legacy / "data" / "real.db").write_bytes(b"not a database")
+    (legacy / "monitor.db").symlink_to("data/real.db")
+    assert run(apply=True) == 0
+    target = os.readlink(canonical / "monitor.db")
+    assert target == str(legacy / "data" / "real.db")
+    assert "relative target made absolute" in capsys.readouterr().out
+
+
+def test_symlink_conflict_with_different_entry(homes, tmp_path, capsys):
+    legacy, canonical = homes
+    (legacy / "monitor.db").symlink_to(tmp_path / "a.db")
+    canonical.mkdir()
+    (canonical / "monitor.db").symlink_to(tmp_path / "b.db")
+    (legacy / "telemetry.db").symlink_to(tmp_path / "a.db")
+    (canonical / "telemetry.db").write_bytes(b"plain file")
+    items = _items(capsys)
+    assert items["monitor.db"]["action"] == "CONFLICT"
+    assert items["telemetry.db"]["action"] == "CONFLICT"
+    assert run(apply=True) == 0
+    assert os.readlink(canonical / "monitor.db") == str(tmp_path / "b.db")
+    assert (canonical / "telemetry.db").read_bytes() == b"plain file"
