@@ -12,6 +12,8 @@ from typing import Any
 
 import yaml
 
+from tokenpak import _paths
+
 
 @dataclass(frozen=True)
 class SelectedExample:
@@ -46,11 +48,18 @@ class IntentExampleSelector:
     def __init__(
         self,
         *,
-        examples_root: str | Path = "~/.tokenpak/examples",
-        config_path: str | Path = "~/.tokenpak/examples/config.yaml",
+        examples_root: str | Path | None = None,
+        config_path: str | Path | None = None,
     ) -> None:
-        self.examples_root = Path(examples_root).expanduser()
-        self.config_path = Path(config_path).expanduser()
+        root = (
+            Path(examples_root).expanduser() if examples_root else _paths.write_home() / "examples"
+        )
+        self.examples_root = root
+        self.config_path = (
+            Path(config_path).expanduser()
+            if config_path
+            else _paths.write_home() / "examples" / "config.yaml"
+        )
 
     @staticmethod
     def _estimate_tokens(text: str) -> int:

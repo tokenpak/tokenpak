@@ -28,7 +28,9 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Mapping, Optional, TypeAlias, Union, cast
 
-DEFAULT_HANDOFF_DIR = Path.home() / ".tokenpak" / "handoffs"
+from tokenpak import _paths
+
+DEFAULT_HANDOFF_DIR = _paths.write_home() / "handoffs"
 DEFAULT_TTL_HOURS = 24
 REGISTERED_AGENTS = {"cali", "sue", "trix", "operator"}
 

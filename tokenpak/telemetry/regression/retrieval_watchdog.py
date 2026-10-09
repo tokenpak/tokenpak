@@ -23,6 +23,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -230,7 +232,7 @@ class RetrievalQualityWatchdog:
         self.auto_remediate = auto_remediate
 
         self.history_path = Path(
-            history_path or str(Path.home() / ".tokenpak" / "retrieval_watchdog_history.json")
+            history_path or str(_paths.write_home() / "retrieval_watchdog_history.json")
         )
         self.history_path.parent.mkdir(parents=True, exist_ok=True)
 

@@ -30,13 +30,14 @@ import time
 from pathlib import Path
 from typing import Any, Protocol, cast
 
+from tokenpak import _paths
 from tokenpak.compression.processors import get_processor
 from tokenpak.compression.processors.image import ImageProcessor
 from tokenpak.core.registry import Block, BlockRegistry
 from tokenpak.telemetry.tokens import clear_cache, count_tokens
 from tokenpak.vault.walker import walk_directory
 
-PROFILE_PATH = Path.home() / ".tokenpak" / "calibration.json"
+PROFILE_PATH = _paths.write_home() / "calibration.json"
 
 
 class _TextProcessor(Protocol):

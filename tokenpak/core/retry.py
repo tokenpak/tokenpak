@@ -82,11 +82,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable, Generic, Mapping, Optional, TypedDict, TypeVar, cast
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_STATE_DIR = Path.home() / ".tokenpak" / "retry_state"
-RETRY_EVENT_LOG = Path.home() / ".tokenpak" / "retry_events.jsonl"
-CONFIG_PATH = Path.home() / ".tokenpak" / "config.json"
+DEFAULT_STATE_DIR = _paths.write_home() / "retry_state"
+RETRY_EVENT_LOG = _paths.write_home() / "retry_events.jsonl"
+CONFIG_PATH = _paths.write_home() / "config.json"
 
 MODEL_DOWNGRADE_PATH: list[str] = [
     "claude-opus-4-5",

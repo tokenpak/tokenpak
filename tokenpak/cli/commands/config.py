@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any
+from typing import Any, Optional
+
+from tokenpak import _paths
 
 TOKENPAK_VARS = [
     ("TOKENPAK_PORT", "Proxy listen port"),
@@ -116,12 +118,15 @@ try:
         run_set(key, value)
 
     @config_cmd.command("validate")
-    @click.argument("config_file", required=False, default="~/.tokenpak/config.yaml")
-    def config_validate_cmd(config_file: str) -> None:
+    @click.argument("config_file", required=False, default=None)
+    def config_validate_cmd(config_file: Optional[str]) -> None:
         """Validate a TokenPak config file against the schema."""
         import sys
 
         from tokenpak.cli.cli_validate_config import format_errors, validate_config_file
+
+        if config_file is None:
+            config_file = str(_paths.write_home() / "config.yaml")
 
         is_valid, errors = validate_config_file(config_file)
 

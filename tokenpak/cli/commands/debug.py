@@ -8,6 +8,8 @@ __all__ = ("debug_cmd",)
 from argparse import Namespace
 from typing import TYPE_CHECKING, Optional
 
+from tokenpak import _paths
+
 if TYPE_CHECKING:
     from tokenpak.core.debug import DebugState
     from tokenpak.proxy.spend_guard.receipt import ReceiptDebugPointer
@@ -93,9 +95,8 @@ def _render_request_receipt(request_id: Optional[str], *, redact: bool = True) -
 
 def _support_bundle_pointer(reason: str) -> str:
     """Return a redaction-safe pointer to where debug evidence lives."""
-    from pathlib import Path
 
-    debug_dir = Path.home() / ".tokenpak" / "debug"
+    debug_dir = _paths.write_home() / "debug"
     return (
         f"No receipt: {reason}.\n"
         f"Debug capture bundle: {debug_dir}\n"

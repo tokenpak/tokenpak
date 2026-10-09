@@ -50,11 +50,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Dict, List, Optional
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_RUNBOOKS_DIR = Path.home() / ".tokenpak" / "runbooks"
+DEFAULT_RUNBOOKS_DIR = _paths.write_home() / "runbooks"
 DEFAULT_INDEX_PATH = DEFAULT_RUNBOOKS_DIR / "_index.json"
 
 # Minimum occurrences of a similar task before we create a runbook

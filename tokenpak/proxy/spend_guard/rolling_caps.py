@@ -66,6 +66,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, TypedDict
 
+from tokenpak import _paths
+
 _log = logging.getLogger(__name__)
 
 
@@ -84,7 +86,7 @@ class RollingUsage(TypedDict):
 # equals this literal, the shared resolver (tokenpak._paths.monitor_db) picks
 # the real DB path; when a test/config has patched ``_DEFAULT_MONITOR_DB``,
 # the override is honored verbatim.
-_LEGACY_DEFAULT_MONITOR_DB = "~/.tokenpak/monitor.db"
+_LEGACY_DEFAULT_MONITOR_DB = "<resolved by tokenpak._paths.monitor_db>"
 _DEFAULT_MONITOR_DB = _LEGACY_DEFAULT_MONITOR_DB
 
 # In-memory session→agent mapping. Populated as the proxy sees requests
@@ -324,7 +326,7 @@ def _path(monitor_db_path: Optional[str]) -> Path:
                 return cand
     except Exception as e:  # resolver itself failing must not crash the guard
         _log.debug("rolling_caps: monitor-db resolver failed: %s", e)
-    return Path(os.path.expanduser(_DEFAULT_MONITOR_DB))
+    return _paths.write_home() / "monitor.db"
 
 
 def _get_agents_for_window(window_seconds: int) -> dict[str, list[str]]:

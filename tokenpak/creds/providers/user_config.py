@@ -22,7 +22,7 @@ Perms are expected to be 0600; ``creds doctor`` flags looser perms.
 
 from __future__ import annotations
 
-from pathlib import Path
+from tokenpak import _paths
 
 try:
     import tomllib  # py311+
@@ -32,7 +32,7 @@ except ModuleNotFoundError:  # pragma: no cover
 from ..model import REFRESH_NONE, REFRESH_TOKENPAK, Credential
 
 PROVIDER_NAME = "user-config"
-CONFIG_PATH = Path.home() / ".tokenpak" / "credentials.toml"
+CONFIG_PATH = _paths.write_home() / "credentials.toml"
 
 
 def discover() -> list[Credential]:

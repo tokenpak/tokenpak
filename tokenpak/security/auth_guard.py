@@ -21,6 +21,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Callable
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 AuthFailureDetails = dict[str, object]
@@ -32,7 +34,7 @@ AuthFailureHandler = Callable[[str, str, AuthFailureDetails], None]
 AUTH_FAILURE_THRESHOLD = int(os.environ.get("TOKENPAK_AUTH_FAILURE_THRESHOLD", "3"))
 AUTH_ALERT_COOLDOWN_SEC = int(os.environ.get("TOKENPAK_AUTH_ALERT_COOLDOWN", "300"))  # 5 min
 INCIDENT_LOG_PATH = Path(
-    os.environ.get("TOKENPAK_INCIDENT_LOG", os.path.expanduser("~/.tokenpak/incidents.log"))
+    os.environ.get("TOKENPAK_INCIDENT_LOG", str(_paths.write_home() / "incidents.log"))
 )
 
 

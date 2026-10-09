@@ -9,6 +9,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from tokenpak import _paths
+
 
 @dataclass
 class BaselineEntry:
@@ -44,7 +46,7 @@ class BaselineRegistry:
             registry_path: Path to baselines.json (default: ~/.tokenpak/baselines.json)
         """
         if registry_path is None:
-            registry_path = str(Path.home() / ".tokenpak" / "baselines.json")
+            registry_path = str(_paths.write_home() / "baselines.json")
 
         self.registry_path = registry_path
         Path(self.registry_path).parent.mkdir(parents=True, exist_ok=True)

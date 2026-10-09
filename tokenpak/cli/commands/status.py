@@ -28,6 +28,8 @@ from pathlib import Path
 from types import ModuleType
 from typing import TYPE_CHECKING, Any, Dict, List, Optional, cast
 
+from tokenpak import _paths
+
 if TYPE_CHECKING:
     from tokenpak.core.contracts.session_economics import SessionEconomics
 
@@ -143,7 +145,7 @@ _SELECTED_SESSION: contextvars.ContextVar[str] = contextvars.ContextVar(
 # was removed so this never seeds a divergent pre-dot store.
 DB_DEFAULT = os.environ.get(
     "TOKENPAK_DB",
-    os.path.expanduser("~/.tpk/monitor.db"),
+    str(_paths.write_home() / "monitor.db"),
 )
 
 

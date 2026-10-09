@@ -19,7 +19,7 @@ def test_default_port_bind_synonyms_normalize_to_single_signature():
 
 def test_external_pattern_config_from_home_path(tmp_path, monkeypatch):
     fake_home = tmp_path
-    config_dir = fake_home / ".tokenpak"
+    config_dir = fake_home / ".tpk"
     config_dir.mkdir(parents=True)
     (config_dir / "error_patterns.json").write_text(
         json.dumps([{"regex": "database is locked", "normalized_signature": "DB_LOCKED"}])

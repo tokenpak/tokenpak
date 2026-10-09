@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Data structures
 # ---------------------------------------------------------------------------
@@ -232,7 +234,7 @@ class StabilityScorer:
 
     def __init__(self, store_path: Optional[str] = None) -> None:
         if store_path is None:
-            store_path = str(Path.home() / ".tokenpak" / "stability_scores.json")
+            store_path = str(_paths.write_home() / "stability_scores.json")
         self.store_path = Path(store_path)
         self.store_path.parent.mkdir(parents=True, exist_ok=True)
         self._data: Dict[str, Any] = self._load()

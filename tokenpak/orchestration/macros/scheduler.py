@@ -15,7 +15,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DEFAULT_SCHEDULE_PATH = Path.home() / ".tokenpak" / "scheduled.json"
+from tokenpak import _paths
+
+DEFAULT_SCHEDULE_PATH = _paths.write_home() / "scheduled.json"
 CRON_COMMENT_TAG = "# tokenpak-schedule"
 
 

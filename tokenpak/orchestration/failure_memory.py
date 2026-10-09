@@ -42,11 +42,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_SIGNATURES_PATH = Path.home() / ".tokenpak" / "failure_signatures.json"
+DEFAULT_SIGNATURES_PATH = _paths.write_home() / "failure_signatures.json"
 
 # Number of successful repairs before a signature is marked validated
 N_VALIDATE_SUCCESSES = 3

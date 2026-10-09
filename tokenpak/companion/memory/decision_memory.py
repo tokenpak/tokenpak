@@ -23,12 +23,13 @@ Example usage:
 """
 
 import hashlib
-import os
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
+
+from tokenpak import _paths
 
 
 @dataclass
@@ -62,7 +63,7 @@ class DecisionMemoryDB:
             db_path: path to SQLite database (default: ~/.tokenpak/memory.db)
         """
         if db_path is None:
-            db_path = os.path.expanduser("~/.tokenpak/memory.db")
+            db_path = str(_paths.write_home() / "memory.db")
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

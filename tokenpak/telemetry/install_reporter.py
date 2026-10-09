@@ -33,8 +33,9 @@ import threading
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
 from typing import Optional
+
+from tokenpak import _paths
 
 logger = logging.getLogger(__name__)
 
@@ -47,8 +48,8 @@ INGEST_URL = os.environ.get(
     "https://metrics.tokenpak.ai/metrics",
 )
 HEARTBEAT_INTERVAL_S = 60 * 60 * 24  # 24 hours
-BUFFER_PATH = Path(os.path.expanduser("~/.tokenpak/metrics_buffer.jsonl"))
-INSTALL_ID_PATH = Path(os.path.expanduser("~/.tokenpak/install_id"))
+BUFFER_PATH = _paths.write_home() / "metrics_buffer.jsonl"
+INSTALL_ID_PATH = _paths.write_home() / "install_id"
 
 
 # ---------------------------------------------------------------------------

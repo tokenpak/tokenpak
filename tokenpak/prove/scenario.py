@@ -34,8 +34,10 @@ from typing import Any
 
 import yaml
 
+from tokenpak import _paths
+
 _BUILTIN_DIR = Path(__file__).parent / "scenarios"
-_USER_DIR = Path.home() / ".tokenpak" / "prove" / "scenarios"
+_USER_DIR = _paths.write_home() / "prove" / "scenarios"
 
 
 @dataclass

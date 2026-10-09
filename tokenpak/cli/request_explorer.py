@@ -8,7 +8,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-REQUESTS_PATH = Path.home() / ".tokenpak" / "requests.jsonl"
+from tokenpak import _paths
+
+REQUESTS_PATH = _paths.write_home() / "requests.jsonl"
 
 
 @dataclass

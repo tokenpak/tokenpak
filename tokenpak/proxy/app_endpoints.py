@@ -39,6 +39,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 from urllib.parse import parse_qs, urlparse
 
+from tokenpak import _paths
 from tokenpak.companion.recall import (
     LIST_LIMIT_DEFAULT,
     PakListFilters,
@@ -1500,7 +1501,7 @@ def _handle_pak_status(handler: Any) -> None:
     multipak_enabled = _read_multipak_enabled()
 
     # Pak store presence — directory existence is sufficient signal.
-    pak_store_dir = Path.home() / ".tokenpak" / "pro" / "state" / "multipak"
+    pak_store_dir = _paths.write_home() / "pro" / "state" / "multipak"
     pak_store_present = pak_store_dir.is_dir()
 
     # Vault index block count (best-effort — empty when index unavailable).

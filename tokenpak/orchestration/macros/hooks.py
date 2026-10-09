@@ -22,9 +22,11 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tokenpak import _paths
+
 # Default paths
-DEFAULT_TRIGGERS_PATH = Path.home() / ".tokenpak" / "triggers.json"
-DEFAULT_LOG_PATH = Path.home() / ".tokenpak" / "trigger_log.json"
+DEFAULT_TRIGGERS_PATH = _paths.write_home() / "triggers.json"
+DEFAULT_LOG_PATH = _paths.write_home() / "trigger_log.json"
 MAX_LOG_ENTRIES = 1000
 
 

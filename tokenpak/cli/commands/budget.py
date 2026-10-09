@@ -28,7 +28,7 @@ def _default_monitor_db() -> str:
             return str(resolved)
         return str(_paths.canonical_home() / "monitor.db")
     except Exception:
-        return os.path.expanduser("~/.tpk/monitor.db")
+        return str(_paths.write_home() / "monitor.db")
 
 
 def _monitor_db() -> str:
@@ -53,7 +53,7 @@ def _budget_config() -> Path:
         found = _paths.resolve_existing("budget_config.yaml")
         return found if found is not None else _paths.write_home() / "budget_config.yaml"
     except Exception:
-        return Path("~/.tpk/budget_config.yaml").expanduser()
+        return _paths.write_home() / "budget_config.yaml"
 
 
 # ---------------------------------------------------------------------------

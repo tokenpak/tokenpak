@@ -32,6 +32,7 @@ from typing import TYPE_CHECKING, Optional, TypedDict
 
 import httpx
 
+from tokenpak import _paths
 from tokenpak._formatting.picker import pick as _shared_pick
 
 if TYPE_CHECKING:
@@ -219,7 +220,7 @@ def _detect_providers() -> list[tuple[str, str]]:
             found[pid] = f"{env_var}"
 
     # 5. User providers.yaml
-    user_cfg = Path.home() / ".tokenpak" / "prove" / "providers.yaml"
+    user_cfg = _paths.write_home() / "prove" / "providers.yaml"
     if user_cfg.exists():
         try:
             import yaml
@@ -723,7 +724,7 @@ def run_test(
 
     n_turns = len(turns)
     n_arms = len(arms_cfg)
-    log_dir = Path.home() / ".tokenpak" / "test" / "logs"
+    log_dir = _paths.write_home() / "test" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Clear screen and show header ────────────────────────
@@ -796,7 +797,7 @@ def run_test(
     print(report)
 
     # ── Save ────────────────────────────────────────────────
-    results_dir = Path.home() / ".tokenpak" / "test" / "results"
+    results_dir = _paths.write_home() / "test" / "results"
     results_dir.mkdir(parents=True, exist_ok=True)
     from tokenpak.prove.reporter import save_result
 

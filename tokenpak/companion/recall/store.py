@@ -53,10 +53,10 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, NamedTuple, Optional
 
+from tokenpak import _paths
 from tokenpak.companion.recall.migrations import apply_migrations, current_version
 from tokenpak.companion.recall.schema import SCHEMA_VERSION
 
-_DEFAULT_REL_PATH = ".tokenpak/companion/recall.db"
 _ENV_VAR = "TOKENPAK_RECALL_DB"
 
 _log = logging.getLogger(__name__)
@@ -226,7 +226,7 @@ def default_recall_db_path() -> Path:
     """Resolve the default recall DB path, honouring the env override."""
     if override := os.environ.get(_ENV_VAR):
         return Path(override).expanduser()
-    return Path.home() / _DEFAULT_REL_PATH
+    return _paths.companion_write_dir() / "recall.db"
 
 
 class RecallStore:

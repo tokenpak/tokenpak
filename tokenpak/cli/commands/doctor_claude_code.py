@@ -63,7 +63,7 @@ def _proxy_pid_path() -> Path:
 
         return _paths.home() / "proxy.pid"
     except Exception:
-        return Path.home() / ".tpk" / "proxy.pid"
+        return _paths.write_home() / "proxy.pid"
 
 
 def _monitor_db_path() -> Path:
@@ -77,7 +77,7 @@ def _monitor_db_path() -> Path:
             return resolved
         return _paths.canonical_home() / "monitor.db"
     except Exception:
-        return Path.home() / ".tpk" / "monitor.db"
+        return _paths.write_home() / "monitor.db"
 
 
 class CheckResult(TypedDict):

@@ -21,6 +21,8 @@ import sys
 import time
 from pathlib import Path
 
+from tokenpak import _paths
+
 from .adapter import ArmConfig, ArmResult, TurnResult
 from .adapter import run_arm as adapter_run_arm
 from .display import LiveDisplay
@@ -81,7 +83,7 @@ def run_proof(
     n_arms = len(arms)
     n_turns = len(scenario.turns)
 
-    log_dir = Path.home() / ".tokenpak" / "prove" / "logs"
+    log_dir = _paths.write_home() / "prove" / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
 
     # ── Header ──────────────────────────────────────────────

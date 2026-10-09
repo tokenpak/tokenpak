@@ -17,8 +17,10 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tokenpak import _paths
+
 # Default paths
-REGISTRY_PATH = Path.home() / ".tokenpak" / "agents.json"
+REGISTRY_PATH = _paths.write_home() / "agents.json"
 DEFAULT_EXPIRE_SECONDS = 30 * 60  # 30 minutes
 
 

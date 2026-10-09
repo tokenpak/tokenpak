@@ -34,6 +34,7 @@ from typing import (
     cast,
 )
 
+from tokenpak import _paths
 from tokenpak._formatting import OutputFormatter, OutputMode, resolve_mode
 from tokenpak._formatting import symbols as FS
 
@@ -446,7 +447,7 @@ def _proxy_get(path: str, port: Optional[int] = None) -> JsonObject | None:
 
 #: Name of the first-run marker. Resolved lazily (see ``_first_run_flag``)
 #: rather than bound at import time: a module-level
-#: ``Path.home() / ".tokenpak" / ".seen_intro"`` meant that *any* verb — even
+#: ``_paths.write_home() / ".seen_intro"`` meant that *any* verb — even
 #: ``tokenpak version`` — created the legacy home before anything else ran,
 #: which pinned path resolution to the legacy directory for the life of the
 #: install and created it at the process umask (0775) instead of 0700.
@@ -3317,7 +3318,7 @@ def cmd_prove(args: CommandArgs) -> None:
         import json
 
         proof_id = getattr(args, "proof_id", "")
-        results_dir = __import__("pathlib").Path.home() / ".tokenpak" / "prove" / "results"
+        results_dir = _paths.write_home() / "prove" / "results"
         path = results_dir / f"{proof_id}.json"
         if not path.exists():
             matches = list(results_dir.glob(f"{proof_id}*.json")) if results_dir.exists() else []
@@ -3366,14 +3367,13 @@ def cmd_prove(args: CommandArgs) -> None:
 
 def _prove_create_scenario(args: CommandArgs) -> None:
     """Create a new scenario .md file from CLI args or interactively."""
-    from pathlib import Path
 
     name = getattr(args, "name", None)
     if not name:
         print("Usage: tokenpak prove create --name <scenario-name>")
         return
 
-    scenarios_dir = Path.home() / ".tokenpak" / "prove" / "scenarios"
+    scenarios_dir = _paths.write_home() / "prove" / "scenarios"
     scenarios_dir.mkdir(parents=True, exist_ok=True)
     path = scenarios_dir / f"{name}.md"
 
@@ -5659,7 +5659,7 @@ except ImportError:  # pragma: no cover - circular import during package init
     except Exception:
         PROXY_VERSION = "unknown"
 _LOCK_FILE = Path.home() / "vault" / "System" / "tokenpak.lock.json"
-_TOKENPAK_CFG = Path.home() / ".tokenpak" / "config.json"
+_TOKENPAK_CFG = _paths.write_home() / "config.json"
 _PROXY_URL = "http://localhost:8766"
 
 
@@ -9108,7 +9108,7 @@ def _build_agent_parser(sub: Subparsers) -> None:
 
 def _replay_store_path() -> str:
     """Return the default replay store path (honouring XDG convention)."""
-    return str(Path.home() / ".tokenpak" / "replay.db")
+    return str(_paths.write_home() / "replay.db")
 
 
 def _get_replay_store() -> "ReplayStore":

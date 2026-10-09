@@ -33,10 +33,11 @@ __all__ = (
 
 
 import json
-import os
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional, TypedDict, cast
+
+from tokenpak import _paths
 
 if TYPE_CHECKING:
     from tokenpak.orchestration.episode_distiller import EpisodeRecord
@@ -46,7 +47,7 @@ if TYPE_CHECKING:
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_LEARNING_PATH = os.path.expanduser("~/.tokenpak/learning.json")
+DEFAULT_LEARNING_PATH = str(_paths.write_home() / "learning.json")
 
 # Minimum samples before we trust a learned metric
 MIN_SAMPLES_THRESHOLD = 5

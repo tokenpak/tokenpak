@@ -22,6 +22,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 _log = logging.getLogger(__name__)
 
 
@@ -216,7 +218,7 @@ def session_cumulative_cost_from_audit(
     session_id: str,
     *,
     window_seconds: int = 3600,
-    audit_db_path: str = "~/.tokenpak/spend_guard.db",
+    audit_db_path: Optional[str] = None,
 ) -> float:
     """Alternative: sum projected cost from the spend_guard audit log.
 
@@ -227,7 +229,7 @@ def session_cumulative_cost_from_audit(
     """
     if not session_id:
         return 0.0
-    p = Path(os.path.expanduser(audit_db_path))
+    p = Path(os.path.expanduser(audit_db_path or str(_paths.write_home() / "spend_guard.db")))
     if not p.exists():
         return 0.0
     cutoff_ts = time.time() - window_seconds

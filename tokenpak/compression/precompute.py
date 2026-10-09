@@ -29,11 +29,13 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Optional, cast
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_ARTIFACTS_DIR = Path.home() / ".tokenpak" / "artifacts"
+DEFAULT_ARTIFACTS_DIR = _paths.write_home() / "artifacts"
 
 
 # ---------------------------------------------------------------------------

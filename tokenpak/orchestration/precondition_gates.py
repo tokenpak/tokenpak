@@ -47,14 +47,16 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Defaults
 # ---------------------------------------------------------------------------
 
-DEFAULT_GATES_PATH = Path.home() / ".tokenpak" / "preconditions.json"
-DEFAULT_FAILURES_PATH = Path.home() / ".tokenpak" / "precondition_failures.jsonl"
+DEFAULT_GATES_PATH = _paths.write_home() / "preconditions.json"
+DEFAULT_FAILURES_PATH = _paths.write_home() / "precondition_failures.jsonl"
 AUTO_PROMOTE_THRESHOLD = 3  # failures before auto-gate
 SUPPORTED_GATE_TYPES = frozenset(
     [

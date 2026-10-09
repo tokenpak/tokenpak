@@ -11,7 +11,6 @@ deployments, capturing exceptions with contextual metadata for post-mortem analy
 import gzip
 import json
 import logging
-import os
 import shutil
 import threading
 import traceback
@@ -20,6 +19,8 @@ from datetime import datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+from tokenpak import _paths
 
 # Get logger
 logger = logging.getLogger(__name__)
@@ -55,7 +56,7 @@ class ErrorLogger:
             log_dir: Directory to store error logs. Defaults to ~/.tokenpak/logs/
         """
         if log_dir is None:
-            log_dir = os.path.expanduser("~/.tokenpak/logs")
+            log_dir = str(_paths.write_home() / "logs")
 
         self.log_dir = Path(log_dir)
         self.log_dir.mkdir(parents=True, exist_ok=True)
@@ -263,10 +264,9 @@ def log_exception(request_id: str, context: Optional[Dict[str, Any]] = None):
 # Public API additions (backwards-compat shims)
 # ---------------------------------------------------------------------------
 
-from pathlib import Path as _Path
 
 # Canonical log directory constant
-LOGS_DIR = str(_Path(os.path.expanduser("~/.tokenpak/logs")))
+LOGS_DIR = str(_paths.write_home() / "logs")
 
 
 @dataclass

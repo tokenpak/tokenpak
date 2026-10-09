@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional
 
+from tokenpak import _paths
 from tokenpak.core.schemas.artifact import ArtifactSchema
 from tokenpak.core.schemas.chunk import ChunkSchema
 from tokenpak.core.schemas.retrieval_cache import RetrievalCacheSchema
@@ -27,7 +28,7 @@ class ArtifactStore:
             db_path: Path to SQLite database (default: ~/.tokenpak/artifacts.db)
         """
         if db_path is None:
-            db_path = str(Path.home() / ".tokenpak" / "artifacts.db")
+            db_path = str(_paths.write_home() / "artifacts.db")
 
         self.db_path = db_path
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)

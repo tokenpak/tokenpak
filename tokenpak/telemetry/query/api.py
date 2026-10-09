@@ -35,6 +35,8 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -42,7 +44,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 VAULT_ENTRIES_DIR = Path(
-    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", "~/.tokenpak/entries"))
+    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", str(_paths.write_home() / "entries")))
 )
 
 

@@ -20,6 +20,8 @@ import urllib.error
 import urllib.request
 from typing import Optional
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ── Configuration (overridable via env vars) ──────────────────────────────────
@@ -37,7 +39,7 @@ SWAP_TELEGRAM_ALERT_MB: int = int(os.environ.get("TOKENPAK_SWAP_ALERT_MB", "1024
 # Self-heal script path and cooldown
 SWAP_SELF_HEAL_SCRIPT: str = os.environ.get(
     "TOKENPAK_SWAP_SELF_HEAL_SCRIPT",
-    os.path.expanduser("~/.tokenpak/scripts/self-heal-memory.sh"),
+    str(_paths.write_home() / "scripts/self-heal-memory.sh"),
 )
 _SWAP_SELF_HEAL_COOLDOWN_S: int = int(os.environ.get("TOKENPAK_SWAP_SELF_HEAL_COOLDOWN_S", "1800"))
 
@@ -82,7 +84,7 @@ def _get_swap_mb() -> tuple[float, float, float]:
 
 def _get_telegram_token() -> Optional[str]:
     """Read Telegram bot token from tokenpak config."""
-    config_path = os.path.expanduser("~/.tokenpak/config.json")
+    config_path = str(_paths.write_home() / "config.json")
     try:
         with open(config_path) as f:
             cfg = json.load(f)

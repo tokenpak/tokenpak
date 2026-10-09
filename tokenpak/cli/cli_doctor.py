@@ -4,7 +4,8 @@
 import json
 import socket
 import sys
-from pathlib import Path
+
+from tokenpak import _paths
 
 
 class Colors:
@@ -46,7 +47,7 @@ def cmd_doctor(args):
         results["fail"] += 1
 
     # Check 2: Config file
-    config_path = Path.home() / ".tokenpak" / "config.json"
+    config_path = _paths.write_home() / "config.json"
     if config_path.exists():
         try:
             with open(config_path) as f:
@@ -63,7 +64,7 @@ def cmd_doctor(args):
         fixes_needed.append("create config")
 
     # Check 3: Vault index
-    index_path = Path.home() / ".tokenpak" / "index.json"
+    index_path = _paths.write_home() / "index.json"
     if index_path.exists():
         try:
             with open(index_path) as f:
@@ -147,7 +148,7 @@ def cmd_doctor(args):
             results["warn"] += 1
 
     # Check 5: Disk usage
-    tokenpak_dir = Path.home() / ".tokenpak"
+    tokenpak_dir = _paths.write_home()
     try:
         total_size = sum(f.stat().st_size for f in tokenpak_dir.rglob("*") if f.is_file())
         size_mb = total_size / (1024 * 1024)
@@ -162,7 +163,7 @@ def cmd_doctor(args):
         results["warn"] += 1
 
     # Check 6: Log file
-    log_path = Path.home() / ".tokenpak" / "debug.log"
+    log_path = _paths.write_home() / "debug.log"
     if log_path.exists():
         log_size_mb = log_path.stat().st_size / (1024 * 1024)
         print(Colors.ok(f"Debug log           {log_path} — {log_size_mb:.2f} MB"))

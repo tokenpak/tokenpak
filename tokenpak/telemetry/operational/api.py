@@ -21,6 +21,8 @@ import os
 
 from flask import Flask, jsonify
 
+from tokenpak import _paths
+
 from .rbac_auth import init_rbac
 from .rbac_routes import rbac_bp
 
@@ -30,7 +32,7 @@ app = Flask(__name__)
 # Config
 # ---------------------------------------------------------------------------
 
-RBAC_DB_PATH = "~/.tokenpak/data/rbac.db"
+RBAC_DB_PATH = str(_paths.write_home() / "data" / "rbac.db")
 RBAC_DB_PATH = os.environ.get("TOKENPAK_RBAC_DB_PATH", RBAC_DB_PATH)
 
 # ---------------------------------------------------------------------------

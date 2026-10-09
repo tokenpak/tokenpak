@@ -15,6 +15,8 @@ from datetime import date, timedelta
 from pathlib import Path
 from typing import Any, Optional, cast
 
+from tokenpak import _paths
+
 
 def estimate_cost(model: str, prompt_tokens: int, completion_tokens: int) -> float:
     """Return estimated cost in USD for the given model and token counts.
@@ -249,11 +251,11 @@ _tracker: Optional[CostTracker] = None
 _tracker_lock = threading.Lock()
 
 
-def get_cost_tracker(db_path: str | Path | None = "~/.tokenpak/cost.db") -> CostTracker:
+def get_cost_tracker(db_path: str | Path | None = None) -> CostTracker:
     """Return the process-level singleton CostTracker."""
     global _tracker
     if _tracker is None:
         with _tracker_lock:
             if _tracker is None:
-                _tracker = CostTracker(db_path)
+                _tracker = CostTracker(db_path or str(_paths.write_home() / "cost.db"))
     return _tracker

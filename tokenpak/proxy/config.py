@@ -106,6 +106,7 @@ from typing import TYPE_CHECKING, Callable, Dict, Optional, TypeVar, cast
 
 import urllib3
 
+from tokenpak import _paths
 from tokenpak.proxy.adapters import build_default_registry
 
 if TYPE_CHECKING:
@@ -499,7 +500,10 @@ SPEND_GUARD_PENDING_TTL_SECONDS: int = _cfg(
     "spend_guard.pending_ttl_seconds", 600, "TOKENPAK_SPEND_GUARD_PENDING_TTL", int
 )
 SPEND_GUARD_AUDIT_DB_PATH: str = _cfg(
-    "spend_guard.audit_db_path", "~/.tokenpak/spend_guard.db", "TOKENPAK_SPEND_GUARD_AUDIT_DB", str
+    "spend_guard.audit_db_path",
+    str(_paths.write_home() / "spend_guard.db"),
+    "TOKENPAK_SPEND_GUARD_AUDIT_DB",
+    str,
 )
 
 # Tier 1 modules

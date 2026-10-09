@@ -13,6 +13,8 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 from .adapter import ArmResult
 
 # ═══════════════════════════════════════════════════════════════════════
@@ -205,7 +207,7 @@ def save_result(
         arms = [arms]
 
     if output_dir is None:
-        output_dir = Path.home() / ".tokenpak" / "prove" / "results"
+        output_dir = _paths.write_home() / "prove" / "results"
     output_dir.mkdir(parents=True, exist_ok=True)
 
     path = output_dir / f"{proof_id}.json"

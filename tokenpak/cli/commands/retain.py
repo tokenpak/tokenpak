@@ -16,15 +16,17 @@ import sys
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
 SEP = "────────────────────────────────────────"
-_PINS_PATH = os.path.expanduser("~/.tokenpak/pinned_blocks.json")
+_PINS_PATH = str(_paths.write_home() / "pinned_blocks.json")
 _BLOCK_STORE_PATH = os.environ.get(
     "TOKENPAK_VAULT_INDEX",
-    os.path.expanduser("~/.tokenpak/vault_index.json"),
+    str(_paths.write_home() / "vault_index.json"),
 )
 
 

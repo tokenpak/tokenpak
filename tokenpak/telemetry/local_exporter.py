@@ -21,13 +21,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
-_DEFAULT_TELEMETRY_DIR = Path(os.path.expanduser("~/.tokenpak/telemetry"))
+_DEFAULT_TELEMETRY_DIR = _paths.write_home() / "telemetry"
 
 TELEMETRY_DIR: Path = Path(os.environ.get("TOKENPAK_TELEMETRY_DIR", str(_DEFAULT_TELEMETRY_DIR)))
 
