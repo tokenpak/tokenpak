@@ -6,6 +6,65 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.31.0] — 2026-10-09
+
+### Added
+
+- `tokenpak update apply` makes a staged or already installed update take
+  effect. It restarts the TokenPak services, and it refuses, changing nothing
+  and exiting with code 9, while a request is in flight or a client is
+  connected. It takes two idle observations a short interval apart and checks
+  again immediately before it stops anything. `--check` reports whether it
+  would apply now without restarting anything. When no service manager is found
+  it prints the exact manual step. `tokenpak update` now reports a pending
+  update instead of downloading it again.
+- A pending update is shown where you already look. `tokenpak status`,
+  `tokenpak doctor` and the stats footer say when a newer version is staged or
+  installed but not running (for example `1.30.3 → 1.31.0, applies at next
+  launch`), and the companion status line ends with `update <version> pending`
+  when there is room for it. The check is local: a staged-release marker, or an
+  installed version newer than the version the proxy reports on its loopback
+  `/health`.
+- `tokenpak doctor` reports a split home: it warns when both `~/.tpk` and
+  `~/.tokenpak` hold TokenPak state, and says when `tokenpak home migrate` has
+  finished the merge. After a migration it warns again only if something wrote
+  to `~/.tokenpak` later.
+
+### Changed
+
+- `tokenpak home migrate` is now a plan-first merge from `~/.tokenpak` into
+  `~/.tpk`; it used to copy blindly. It prints the plan by default and writes
+  only with `--apply`. SQLite databases are snapshotted and merged row by row
+  (journal entries are matched on content, not on row id). A file that differs
+  keeps the `~/.tpk` copy and the `~/.tokenpak` one is saved beside it as
+  `<name>.legacy`. Every changed target is backed up first. Symbolic links are
+  recreated rather than followed. `~/.tokenpak` is never modified or removed.
+  The command refuses while the proxy or a companion session is in use, and a
+  successful `--apply` leaves a `home-migrated.json` receipt in `~/.tpk`.
+- Product code now finds the TokenPak home through one resolver instead of
+  building `~/.tokenpak` or `~/.tpk` paths itself. About a hundred places that
+  wrote to the older home after an install had moved, which split the install
+  again, now write to the home the resolver names. A test fails on a
+  hard-coded home path in product code.
+
+### Compatibility
+
+- **Installs with state in both `~/.tokenpak` and `~/.tpk`.** After you upgrade,
+  new writes go to `~/.tpk`. Spend-cap, cost and telemetry history that lives in
+  `~/.tokenpak` can look reset until you run `tokenpak home migrate --apply`.
+  Run `tokenpak home migrate` first to read the plan. `tokenpak doctor` flags
+  this layout. Installs with a single home are unaffected, and so are installs
+  that set `TOKENPAK_HOME`.
+- Nothing is migrated automatically. The upgrade is package-only. To roll back,
+  install `tokenpak==1.30.3`; anything written to `~/.tpk` after a migration
+  stays there, and the migration leaves `~/.tokenpak` as it was.
+- The public API snapshot gains the new command modules and
+  `tokenpak.core.runtime.update_pending`; no symbol is removed or changed.
+- TokenPak Pro 0.6.0 accepts only TokenPak 1.30.3 and refuses 1.31.0. Pro users
+  stay on 1.30.3 and wait for Pro 0.6.1, which is tested against the exact
+  1.31.0 release source before it is published. See the
+  [1.31.0 release log](docs/release-log/v1.31.0.md).
+
 ## [1.30.3] — 2026-10-07
 
 ### Fixed

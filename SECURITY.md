@@ -51,7 +51,7 @@ We welcome good-faith security research and will not pursue legal action against
 
 ### NLTK model-artifact path confinement
 
-As of October 7, 2026 (reconfirmed at the 1.30.3 release cut — no patched
+As of October 9, 2026 (reconfirmed at the 1.31.0 release cut — no patched
 release exists yet; 3.10.3 is still the newest published version), NLTK
 releases through 3.10.3 are covered by
 [CVE-2026-81726 / GHSA-8mgp-746c-j5xp](https://github.com/advisories/GHSA-8mgp-746c-j5xp),
@@ -84,10 +84,10 @@ LLMLingua. The locked Accelerate 1.14.0 dependency is covered by
 [CVE-2026-69112 / GHSA-4j2p-28q2-5m79](https://github.com/advisories/GHSA-4j2p-28q2-5m79),
 whose CVSS v3.1 score of 7.1 is High under this policy. The advisory separately
 lists Moderate severity with a CVSS v4 score of 6.9. No verified published fix
-is available as of October 7, 2026 (reconfirmed at the 1.30.3 release cut).
-Accelerate 1.15.0, published September 9 and still the newest version,
-retains unchecked checkpoint shard paths (re-checked in the published wheel on
-October 7); its newer version alone does not establish a fix. Crafted shard
+is available as of October 9, 2026 (reconfirmed at the 1.31.0 release cut).
+Accelerate 1.15.0, published September 9 and still the newest version on
+October 9, retains unchecked checkpoint shard paths (re-checked in the published
+wheel on October 7); its newer version alone does not establish a fix. Crafted shard
 paths in a checkpoint index can cause reads outside the checkpoint directory or
 block loading on a named pipe.
 
