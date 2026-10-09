@@ -66,9 +66,10 @@ class _FakeResp:
 
 @pytest.fixture
 def doctor_home(tmp_path, monkeypatch):
-    """Redirect ``Path.home()`` to an isolated tmp dir and create ~/.tokenpak."""
-    monkeypatch.setattr(cli_doctor.Path, "home", classmethod(lambda cls: tmp_path))
-    (tmp_path / ".tokenpak").mkdir(parents=True, exist_ok=True)
+    """Redirect ``Path.home()`` to an isolated tmp dir and create the canonical ~/.tpk home."""
+    monkeypatch.setattr("pathlib.Path.home", classmethod(lambda cls: tmp_path))
+    monkeypatch.delenv("TOKENPAK_HOME", raising=False)
+    (tmp_path / ".tpk").mkdir(parents=True, exist_ok=True)
     return tmp_path
 
 
@@ -84,7 +85,7 @@ def _stub_health(monkeypatch, payload):
 
 
 def _write_config(home, raw: str) -> None:
-    (home / ".tokenpak" / "config.json").write_text(raw, encoding="utf-8")
+    (home / ".tpk" / "config.json").write_text(raw, encoding="utf-8")
 
 
 def _args() -> types.SimpleNamespace:

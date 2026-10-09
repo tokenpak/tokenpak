@@ -38,6 +38,8 @@ from typing import Iterable, Optional
 from urllib import error as _urlerror
 from urllib import request as _urlrequest
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -48,7 +50,7 @@ DEFAULT_LICENSE_SERVER = os.environ.get("TOKENPAK_LICENSE_SERVER", "http://127.0
 DEFAULT_SPOOL_DIR = Path(
     os.environ.get(
         "TOKENPAK_USAGE_SPOOL_DIR",
-        str(Path.home() / ".tokenpak" / "usage_spool"),
+        str(_paths.write_home() / "usage_spool"),
     )
 )
 DEFAULT_HEARTBEAT_SECONDS = 24 * 60 * 60  # 24h cadence per acceptance criterion 6

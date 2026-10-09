@@ -11,7 +11,9 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-REQUESTS_PATH = Path.home() / ".tokenpak" / "requests.jsonl"
+from tokenpak import _paths
+
+REQUESTS_PATH = _paths.write_home() / "requests.jsonl"
 
 
 @dataclass

@@ -18,6 +18,7 @@ from typing import Any, Mapping, Optional
 
 import httpx
 
+from tokenpak import _paths
 from tokenpak.proxy.handlers.rate_limit import RateLimitBackoff
 
 RETRYABLE_UPSTREAM_EXCEPTIONS: tuple[type[Exception], ...] = (
@@ -365,7 +366,7 @@ def _recovery_dir() -> Path:
         os.path.expanduser(
             os.environ.get(
                 "TOKENPAK_UPSTREAM_RECOVERY_DIR",
-                "~/.tokenpak/recovery/upstream",
+                str(_paths.write_home() / "recovery" / "upstream"),
             )
         )
     )

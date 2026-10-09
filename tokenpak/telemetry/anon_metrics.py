@@ -25,7 +25,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Optional
 
-METRICS_DB = Path(os.path.expanduser("~/.tokenpak/metrics.db"))
+from tokenpak import _paths
+
+METRICS_DB = _paths.write_home() / "metrics.db"
 
 # Version tag lets the ingest endpoint evolve schemas without breakage.
 # v1.1 restoration (2026-05-08): adds active_profile +

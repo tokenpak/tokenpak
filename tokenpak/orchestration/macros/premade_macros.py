@@ -12,6 +12,8 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tokenpak import _paths
+
 PREMADE_MACROS: Dict[str, Dict[str, Any]] = {
     "morning-standup": {
         "description": "Daily cost summary, model usage breakdown, and alert review",
@@ -62,7 +64,7 @@ PREMADE_MACROS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-INSTALL_DIR = Path.home() / ".tokenpak" / "macros"
+INSTALL_DIR = _paths.write_home() / "macros"
 
 
 class PremadeMacroRunner:

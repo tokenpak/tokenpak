@@ -7,9 +7,10 @@ Format: 32-char random hex string
 """
 
 import secrets
-from pathlib import Path
 
-TOKEN_FILE = Path.home() / ".tokenpak" / "dashboard_token"
+from tokenpak import _paths
+
+TOKEN_FILE = _paths.write_home() / "dashboard_token"
 
 
 def generate_token() -> str:

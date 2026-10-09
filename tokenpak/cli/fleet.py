@@ -13,6 +13,8 @@ from typing import Any, List, Optional, cast
 
 import yaml
 
+from tokenpak import _paths
+
 # ── Data structures ───────────────────────────────────────────────────────────
 
 
@@ -62,7 +64,7 @@ class FleetAgentRow:
 
 def _get_fleet_config_path() -> Path:
     """Get the fleet.yaml config path."""
-    return Path.home() / ".tokenpak" / "fleet.yaml"
+    return _paths.write_home() / "fleet.yaml"
 
 
 def load_fleet_config() -> List[FleetMachine]:

@@ -22,7 +22,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, List, Optional, TypedDict
 
-ATTRIBUTION_PATH = Path.home() / ".tokenpak" / "attribution_history.json"
+from tokenpak import _paths
+
+ATTRIBUTION_PATH = _paths.write_home() / "attribution_history.json"
 
 
 class AttributionRecordDict(TypedDict):

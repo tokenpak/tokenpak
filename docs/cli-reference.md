@@ -513,9 +513,10 @@ Inspect, validate, and migrate the TokenPak home directory. All paths resolve th
   - `--json`
 - `explain`
   - `--json`
-- `migrate` — Copy the legacy ~/.tokenpak/ tree to the canonical ~/.tpk/ location. The legacy tree is left in place as a safety backup; you can prune it manually once satisfied.
-  - `--dry-run` — Show what would be copied without writing anything
-  - `--force` — Allow merging into an existing ~/.tpk/ (default: refuse and report what to do manually)
+- `migrate` — Merge TokenPak state from the legacy ~/.tokenpak/ home into the canonical ~/.tpk/ home. Prints a plan by default; --apply writes it. Databases are merged row by row, files that differ keep the canonical copy with the legacy one saved beside it as <name>.legacy, and every changed target is backed up first. The legacy home is never modified or removed. Refuses while the proxy or a companion session is in use.
+  - `--apply` — Write the changes (default: print the plan only)
+  - `--dry-run` — Print the plan without writing (this is the default)
+  - `--json` — Machine-readable output
 
 ### `tokenpak init`
 

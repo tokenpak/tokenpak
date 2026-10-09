@@ -10,6 +10,8 @@ from typing import Any, Callable
 
 import click
 
+from tokenpak import _paths
+
 OperationFn = Callable[[dict[str, Any], bool], int]
 
 
@@ -28,7 +30,9 @@ def _op_reindex(params: dict[str, Any], dry_run: bool) -> int:
 
 
 def _op_validate_config(params: dict[str, Any], dry_run: bool) -> int:
-    cfg_path = Path(os.path.expanduser(str(params.get("path", "~/.tokenpak/config.json"))))
+    cfg_path = Path(
+        os.path.expanduser(str(params.get("path", _paths.write_home() / "config.json")))
+    )
 
     if dry_run:
         click.echo(f"[dry-run] validate-config path={cfg_path}")
@@ -53,7 +57,7 @@ def _op_validate_config(params: dict[str, Any], dry_run: bool) -> int:
 
 
 def _op_cleanup_cache(params: dict[str, Any], dry_run: bool) -> int:
-    cache_path = Path(os.path.expanduser(str(params.get("path", "~/.tokenpak/cache"))))
+    cache_path = Path(os.path.expanduser(str(params.get("path", _paths.write_home() / "cache"))))
 
     if dry_run:
         click.echo(f"[dry-run] cleanup-cache path={cache_path}")
@@ -160,7 +164,7 @@ def run_macro(name: str, macros_dir: Path, dry_run: bool) -> int:
 @click.argument("name")
 @click.option(
     "--macros-dir",
-    default="~/.tokenpak/macros",
+    default=str(_paths.write_home() / "macros"),
     show_default=True,
     help="Directory containing macro definitions (.json/.yaml/.yml)",
 )

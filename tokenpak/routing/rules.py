@@ -30,6 +30,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tokenpak import _paths
+
 # Try PyYAML first, fall back to a minimal JSON-based store if unavailable.
 try:
     import yaml as _yaml
@@ -43,7 +45,7 @@ import json as _json
 # ---------------------------------------------------------------------------
 # Default store path
 # ---------------------------------------------------------------------------
-DEFAULT_ROUTES_PATH = str(Path.home() / ".tokenpak" / "routes.yaml")
+DEFAULT_ROUTES_PATH = str(_paths.write_home() / "routes.yaml")
 
 
 # ---------------------------------------------------------------------------

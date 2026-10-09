@@ -58,10 +58,10 @@ tokenpak home path
 Expected output (fresh install):
 
 ```
-TokenPak home : /home/you/.tpk
+TokenPak home : ~/.tpk
 Resolved by   : canonical   (or "default" if directory doesn't exist yet)
-Canonical     : /home/you/.tpk          (present: False)
-Legacy        : /home/you/.tokenpak     (present: False)
+Canonical     : ~/.tpk          (present: False)
+Legacy        : ~/.tokenpak     (present: False)
 ```
 
 If you see `⚠️  Legacy ~/.tokenpak/ is in use`, jump to step 3
@@ -74,7 +74,7 @@ tokenpak home init
 Expected output:
 
 ```
-✅ Wrote starter config → /home/you/.tpk/config.json
+✅ Wrote starter config → ~/.tpk/config.json
 
 Next steps:
   • tokenpak home explain  — see every config key
@@ -95,25 +95,37 @@ came from (file vs default vs env override).
 ## 3. Migrate from `~/.tokenpak/` (if applicable)
 
 Only run this step if `tokenpak home path` told you the legacy
-directory is in use. The migration is **backup-first** — your old
-state is left in place untouched.
+directory is in use, or `tokenpak doctor` reports a split home (both
+`~/.tokenpak/` and `~/.tpk/` hold state). The migration merges; it
+never overwrites, and your old directory is left untouched.
 
-Dry-run first to see what would happen:
-
-```bash
-tokenpak home migrate --dry-run
-```
-
-Expected: a list of files that would be copied from `~/.tokenpak/`
-to `~/.tpk/`. Review the list. If it looks right, do it:
+Print the plan first (this is the default and changes nothing):
 
 ```bash
 tokenpak home migrate
 ```
 
-The original `~/.tokenpak/` directory is intentionally left in place
-as a safety backup. Remove it manually once you've verified the
-canonical install works.
+Expected: one line per entry, marked COPY, MERGE, SKIP-identical,
+CONFLICT, or KEEP-legacy-only (files that are not TokenPak state stay
+where they are). Review it. If it looks right, apply it:
+
+```bash
+tokenpak home migrate --apply
+```
+
+Databases are merged row by row. A file that differs keeps the `~/.tpk/`
+copy and the legacy one is saved beside it as `<name>.legacy`. Every
+file it changes is backed up first under
+`~/.tpk/backups/home-migrate-<time>/`. It refuses, and changes nothing,
+while the proxy or a companion session is in use.
+
+A successful `--apply` leaves a small receipt, `~/.tpk/home-migrated.json`.
+`tokenpak doctor` then reports the migration instead of a split home, and
+warns again only if something writes to `~/.tokenpak/` afterwards.
+
+The original `~/.tokenpak/` directory is never modified or removed.
+Remove it yourself once you've run from `~/.tpk/` for a while and are
+satisfied.
 
 ---
 
@@ -217,7 +229,7 @@ Install the Pak into your local store:
 tokenpak pak import /tmp/my.pak.json
 ```
 
-Expected: `✅ Imported Pak pak:abc123… → /home/you/.tpk/paks/...`
+Expected: `✅ Imported Pak pak:abc123… → ~/.tpk/paks/...`
 
 After import you can inspect by Pak id (no file path needed):
 
@@ -341,11 +353,12 @@ input shape. Common rejections:
   `A-Z a-z 0-9 . _ / + = -`)
 - Placeholder string like `test`, `demo`, `tbd`
 
-**`home migrate` refuses to run.** If `~/.tpk/` already exists,
-the command refuses to merge automatically (it's not safe to
-overwrite an existing canonical home). Inspect both directories
-and either remove `~/.tpk/` (if you didn't want it) or rerun with
-`--force` to overlay legacy on top.
+**`home migrate --apply` refuses to run.** TokenPak is in use: a
+request is in flight, a client is connected to the proxy, or a companion
+session has a database open. Nothing was changed. Close the session,
+let the proxy go idle, and run it again. It also refuses when
+`TOKENPAK_HOME` is set, because it moves state between the two default
+homes only.
 
 **TIP conformance fails on a fresh install.** Run `tokenpak tip
 doctor` for the verbose envelope. If schemas are missing, your
@@ -405,8 +418,8 @@ arrive full of colour codes.
 These are already recorded, so you can skip them and we will not waste your time
 re-triaging:
 
-- `tokenpak version` prints a config path under `~/.tokenpak/` and a lock path under
-  `~/vault/System/`. Both are stale strings from an older layout; the state it reports is
+- `tokenpak version` prints a config path and a lock path from an older layout. Both
+  are stale strings; the state it reports is
   correct, and the path it names is not where your config lives. `tokenpak doctor` and
   `tokenpak status` both report the real location.
 - Some commands still create a `~/.tokenpak/` directory alongside the current `~/.tpk/` one,

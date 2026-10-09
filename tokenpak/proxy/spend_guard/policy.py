@@ -39,8 +39,10 @@ single-runaway-prompt cases where the model's max context is unknown.
 from __future__ import annotations
 
 import warnings
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable, Optional
+
+from tokenpak import _paths
 
 from .contracts import PreflightDecision, RiskEstimate, TIPDirective
 
@@ -307,7 +309,7 @@ class SpendGuardConfig:
 
     # ── Operational knobs ──
     pending_ttl_seconds: int = 600
-    audit_db_path: str = "~/.tokenpak/spend_guard.db"
+    audit_db_path: str = field(default_factory=lambda: str(_paths.write_home() / "spend_guard.db"))
     # Below this projected-cost floor we don't even audit (avoid noise).
     audit_min_cost_usd: float = 0.10
 

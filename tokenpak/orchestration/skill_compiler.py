@@ -10,9 +10,10 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from tokenpak import _paths
 from tokenpak.orchestration.macros.engine import MacroEngine, MacroResult
 
-DEFAULT_SKILLS_DIR = Path.home() / ".tokenpak" / "skills"
+DEFAULT_SKILLS_DIR = _paths.write_home() / "skills"
 DEFAULT_SKILL_INDEX = DEFAULT_SKILLS_DIR / "_index.json"
 
 PROMOTION_MIN_SUCCESSFUL_EPISODES = 3

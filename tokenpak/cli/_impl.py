@@ -11,7 +11,6 @@ the requests table so the command is useful before the first cron run.
 from __future__ import annotations
 
 import json
-import os
 import sqlite3
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -40,7 +39,7 @@ def _resolve_db_path(db_path: Optional[str] = None) -> str:
         # existence checks fail cleanly rather than pointing at a legacy store.
         return str(_paths.canonical_home() / "monitor.db")
     except Exception:
-        return os.path.expanduser("~/.tpk/monitor.db")
+        return ""
 
 
 def _open_db(db_path: str) -> Optional[sqlite3.Connection]:

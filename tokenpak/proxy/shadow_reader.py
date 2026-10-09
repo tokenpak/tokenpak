@@ -22,15 +22,15 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, TypedDict
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
 
 SHADOW_MODE = os.environ.get("TOKENPAK_SHADOW_MODE", "").lower() == "true"
 SHADOW_LOG_PATH = Path(
-    os.environ.get(
-        "TOKENPAK_SHADOW_LOG", str(Path.home() / ".tokenpak" / "shadow_observations.jsonl")
-    )
+    os.environ.get("TOKENPAK_SHADOW_LOG", str(_paths.write_home() / "shadow_observations.jsonl"))
 )
 
 # Enable/disable per-category logging in shadow mode

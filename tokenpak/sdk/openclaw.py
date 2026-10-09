@@ -29,9 +29,10 @@ import uuid
 from pathlib import Path
 from typing import Any, TypedDict, cast
 
+from tokenpak import _paths
 from tokenpak.sdk.base import TokenPakAdapter
 
-_SESSION_MAP_PATH = Path.home() / ".tokenpak" / "openclaw_sessions.json"
+_SESSION_MAP_PATH = _paths.write_home() / "openclaw_sessions.json"
 
 
 class _ModelConfig(TypedDict, total=False):

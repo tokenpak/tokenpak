@@ -15,6 +15,8 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # Python 3.12 deprecated the default date/datetime adapters/converters.
@@ -64,7 +66,7 @@ class UsageMeter:
         self.key_id = key_id
 
         if db_path is None:
-            db_path = Path.home() / ".tokenpak" / "usage.db"
+            db_path = _paths.write_home() / "usage.db"
 
         self.db_path = Path(db_path)
         self.db_path.parent.mkdir(parents=True, exist_ok=True)

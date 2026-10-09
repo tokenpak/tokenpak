@@ -124,8 +124,9 @@ class TestLoggingConfig(unittest.TestCase):
     def test_resolve_log_dir_default_contains_tokenpak(self):
         cfg = LoggingConfig()
         d = cfg.resolve_log_dir()
-        self.assertIn(".tokenpak", d)
-        self.assertIn("logs", d)
+        from tokenpak import _paths
+
+        self.assertEqual(d, str(_paths.write_home() / "logs"))
 
     def test_resolve_log_dir_custom(self):
         cfg = LoggingConfig(log_dir="/tmp/my_logs")

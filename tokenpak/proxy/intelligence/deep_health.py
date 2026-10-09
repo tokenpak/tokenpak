@@ -26,6 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Data classes
 # ---------------------------------------------------------------------------
@@ -163,7 +165,7 @@ def check_database(db_path: Optional[str] = None) -> CheckResult:
     Defaults to ~/.tokenpak/data/monitor.db.
     """
     if db_path is None:
-        db_path = os.path.expanduser("~/.tokenpak/data/monitor.db")
+        db_path = str(_paths.write_home() / "data/monitor.db")
 
     path = Path(db_path)
     if not path.exists():
@@ -188,7 +190,7 @@ def check_index(index_path: Optional[str] = None, stale_hours: float = 24.0) -> 
     Marks stale if older than stale_hours.
     """
     if index_path is None:
-        index_path = os.path.expanduser("~/.tokenpak/data/pricing_index.json")
+        index_path = str(_paths.write_home() / "data/pricing_index.json")
 
     path = Path(index_path)
     if not path.exists():

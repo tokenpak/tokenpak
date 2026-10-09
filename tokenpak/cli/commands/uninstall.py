@@ -217,7 +217,7 @@ def _proxy_pid_paths() -> list[Path]:
     from ... import _paths
 
     seen: list[Path] = []
-    for base in (_paths.home(), Path.home() / ".tokenpak"):
+    for base in (_paths.home(), _paths.legacy_home()):
         p = base / "proxy.pid"
         if p not in seen:
             seen.append(p)

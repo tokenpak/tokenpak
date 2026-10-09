@@ -30,6 +30,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Mapping, Optional
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # Promotion gate thresholds
@@ -56,7 +58,7 @@ DEFAULT_TTL = {
     4: None,  # Tier 4: permanent
 }
 
-DEFAULT_PROMOTER_PATH = Path.home() / ".tokenpak" / "memory_promoter.json"
+DEFAULT_PROMOTER_PATH = _paths.write_home() / "memory_promoter.json"
 # Backward-compatible name used by the public learning bridge.
 DEFAULT_MEMORY_PATH = DEFAULT_PROMOTER_PATH
 

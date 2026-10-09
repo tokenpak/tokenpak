@@ -12,9 +12,11 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from typing import Optional
 
+from tokenpak import _paths
+
 DEFAULT_PORT = 8767
 PROXY_URL = os.environ.get("TOKENPAK_PROXY_URL", "http://127.0.0.1:8766")
-LOGS_DIR = os.path.expanduser("~/.tokenpak/logs")
+LOGS_DIR = str(_paths.write_home() / "logs")
 DASHBOARD_HTML = pathlib.Path(__file__).parent / "dashboard.html"
 
 

@@ -51,6 +51,8 @@ import uuid
 from pathlib import Path
 from typing import Any, Iterator, List, Optional, TypedDict, cast
 
+from tokenpak import _paths
+
 try:  # POSIX-only inter-process file locking
     import fcntl
 except ImportError:  # pragma: no cover - Windows
@@ -61,7 +63,7 @@ except ImportError:  # pragma: no cover - Windows
 
 logger = logging.getLogger(__name__)
 
-_DEFAULT_PATH = Path.home() / ".tokenpak" / "cache_store.json"
+_DEFAULT_PATH = _paths.write_home() / "cache_store.json"
 
 
 class _CacheEntry(TypedDict):

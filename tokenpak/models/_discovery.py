@@ -16,15 +16,16 @@ import logging
 import os
 import threading
 import time
-from pathlib import Path
 from typing import Any
+
+from tokenpak import _paths
 
 from ._registry import get_registry
 
 log = logging.getLogger(__name__)
 
 REFRESH_INTERVAL = int(os.environ.get("TOKENPAK_DISCOVERY_INTERVAL", "3600"))
-CACHE_PATH = Path.home() / ".tokenpak" / "data" / "discovered_models.json"
+CACHE_PATH = _paths.write_home() / "data" / "discovered_models.json"
 
 # Provider endpoints that return model lists
 _PROVIDER_ENDPOINTS: dict[str, dict[str, str]] = {

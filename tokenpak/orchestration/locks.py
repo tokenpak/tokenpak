@@ -40,7 +40,9 @@ import time
 from pathlib import Path
 from typing import Optional, TypedDict, cast
 
-DEFAULT_LOCK_DIR = Path.home() / ".tokenpak" / "locks"
+from tokenpak import _paths
+
+DEFAULT_LOCK_DIR = _paths.write_home() / "locks"
 DEFAULT_TIMEOUT_S = 600  # 10 minutes
 
 

@@ -35,6 +35,8 @@ from typing import Iterator as _Iterator
 from typing import Protocol as _Protocol
 from typing import cast as _cast
 
+from tokenpak import _paths
+
 from ..config import CompanionConfig
 from .accounting import (
     build_receipt,
@@ -213,7 +215,7 @@ def _audit_guard_bypassed_proxy_unhealthy(session_id: str | None) -> None:
         from tokenpak.proxy.spend_guard.audit import write_audit
 
         audit_db_path = os.environ.get(
-            "TOKENPAK_SPEND_GUARD_AUDIT_DB", "~/.tokenpak/spend_guard.db"
+            "TOKENPAK_SPEND_GUARD_AUDIT_DB", str(_paths.write_home() / "spend_guard.db")
         )
         write_audit(
             audit_db_path,

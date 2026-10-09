@@ -28,6 +28,8 @@ import time
 from pathlib import Path
 from typing import Any, Optional
 
+from tokenpak import _paths
+
 from .contracts import PendingRequest
 
 # Credential-bearing request headers are NEVER persisted to spend_guard.db.
@@ -209,8 +211,8 @@ class PendingStore:
     connection to keep the proxy thread-safe (BaseHTTPServer is per-request).
     """
 
-    def __init__(self, audit_db_path: str = "~/.tokenpak/spend_guard.db"):
-        self.path = _db_path(audit_db_path)
+    def __init__(self, audit_db_path: Optional[str] = None):
+        self.path = _db_path(audit_db_path or str(_paths.write_home() / "spend_guard.db"))
 
     # -- store -------------------------------------------------------------
     def store(

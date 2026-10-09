@@ -29,6 +29,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 try:
     import tomllib  # py311+
 except ModuleNotFoundError:  # pragma: no cover
@@ -37,7 +39,7 @@ except ModuleNotFoundError:  # pragma: no cover
 from .model import Credential
 from .providers import discover_all
 
-ROUTES_PATH = Path.home() / ".tokenpak" / "routes.toml"
+ROUTES_PATH = _paths.write_home() / "routes.toml"
 
 
 class RouterError(Exception):

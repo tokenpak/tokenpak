@@ -23,7 +23,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import List, Optional, TypedDict, cast
 
-HISTORY_PATH = Path.home() / ".tokenpak" / "history.jsonl"
+from tokenpak import _paths
+
+HISTORY_PATH = _paths.write_home() / "history.jsonl"
 
 # ASCII chart characters (8 levels)
 CHART_CHARS = " ▁▂▃▄▅▆▇█"

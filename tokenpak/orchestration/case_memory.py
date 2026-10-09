@@ -45,11 +45,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
+from tokenpak import _paths
+
 # ---------------------------------------------------------------------------
 # Constants
 # ---------------------------------------------------------------------------
 
-DEFAULT_CASE_MEMORY_PATH = Path.home() / ".tokenpak" / "case_memory.json"
+DEFAULT_CASE_MEMORY_PATH = _paths.write_home() / "case_memory.json"
 
 # Confidence bounds
 _CONF_MIN = 0.0

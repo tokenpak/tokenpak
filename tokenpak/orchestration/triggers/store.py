@@ -10,7 +10,9 @@ from typing import List, Optional
 
 import yaml
 
-DEFAULT_CONFIG = Path.home() / ".tokenpak" / "triggers.yaml"
+from tokenpak import _paths
+
+DEFAULT_CONFIG = _paths.write_home() / "triggers.yaml"
 
 
 @dataclass

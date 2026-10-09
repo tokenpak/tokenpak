@@ -23,7 +23,8 @@ from __future__ import annotations
 
 import json
 import sys
-from pathlib import Path
+
+from tokenpak import _paths
 
 # ---------------------------------------------------------------------------
 # Store helpers
@@ -32,7 +33,7 @@ from pathlib import Path
 
 def _replay_store_path() -> str:
     """Return the default replay store path."""
-    return str(Path.home() / ".tokenpak" / "replay.db")
+    return str(_paths.write_home() / "replay.db")
 
 
 def _get_replay_store():

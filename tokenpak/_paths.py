@@ -131,6 +131,204 @@ _STATE_FILES: frozenset[str] = frozenset(
 )
 
 
+#: Product-owned files that migration carries but that must NOT count as
+#: "this home holds state" in :func:`_holds_state`.
+#:
+#: They are kept apart from ``_STATE_FILES`` on purpose. ``_STATE_FILES`` decides
+#: which home an install lives in, so widening it moves reads and writes for
+#: installs that happen to hold only one of these files. Migration needs the
+#: wider question ("did TokenPak write this?") without changing that answer.
+#: Each name below is written by a product module through this resolver or a
+#: ``get_db_path`` lookup; operator material that merely sits in the same
+#: directory is deliberately absent.
+_MIGRATION_STATE_FILES: frozenset[str] = frozenset(
+    {
+        # ledgers and databases
+        "artifacts.db",
+        "cost.db",
+        "execution_ledger.db",
+        "memory.db",
+        "metrics.db",
+        "registry.db",
+        "replay.db",
+        "routing_ledger.db",
+        "spend_guard.db",
+        "usage.db",
+        # configuration and credentials
+        "budget_config.yaml",
+        "credentials.toml",
+        "goals.yaml",
+        "routes.toml",
+        "routes.yaml",
+        "triggers.json",
+        "triggers.yaml",
+        "vault.yaml",
+        # learned and recorded state
+        "agents.json",
+        "attribution_history.json",
+        "baselines.json",
+        "cache_store.json",
+        "calibration.json",
+        "case_memory.json",
+        "compression_dict.json",
+        "compression_events.jsonl",
+        "dashboard_token",
+        "debug.json",
+        "error_patterns.json",
+        "failure_signatures.json",
+        "goal_state.json",
+        "history.jsonl",
+        "install_id",
+        "instruction_table.json",
+        "learning.json",
+        "memory_promoter.json",
+        "metrics_buffer.jsonl",
+        "openclaw_sessions.json",
+        "precondition_failures.jsonl",
+        "preconditions.json",
+        "pricing.json",
+        "retrieval_watchdog_history.json",
+        "retry_events.jsonl",
+        "scheduled.json",
+        "shadow_observations.jsonl",
+        "stability_scores.json",
+        "trigger_log.json",
+        "update_check.json",
+        "vault_index.json",
+        "workflow_stats.json",
+    }
+)
+
+#: Product-owned subdirectories that migration carries beyond the layout set.
+_MIGRATION_STATE_DIRS: frozenset[str] = frozenset(
+    {
+        "artifacts",
+        "cache",
+        "data",
+        "entries",
+        "examples",
+        "fingerprint_cache",
+        "handoffs",
+        "hooks",
+        "macros",
+        "prove",
+        "recipes",
+        "recovery",
+        "retry_state",
+        "runbooks",
+        "skills",
+        "telemetry",
+        "usage_spool",
+        "vault",
+        "workflows",
+    }
+)
+
+#: Entries that are live process state (sockets, locks, pid files, tunnel
+#: control sockets). They describe a running process, so they are never carried
+#: to another home.
+_RUNTIME_SUFFIXES: tuple[str, ...] = (
+    ".pid",
+    ".sock",
+    ".lock",
+    ".sock-info",
+    ".tmp",
+    "-wal",
+    "-shm",
+    "-journal",
+)
+_RUNTIME_ENTRIES: frozenset[str] = frozenset({"tunnels", "run", "tmp", "locks", "proxy.pid"})
+
+
+def product_state_names() -> frozenset[str]:
+    """Names directly under a home that TokenPak itself writes.
+
+    Derived from the resolver's own registries so migration never keeps a
+    second list: the layout files, the known subdirectories, and the product
+    files and directories only migration needs to know about.
+    """
+    return _STATE_FILES | _MIGRATION_STATE_FILES | _known_subdirs() | _MIGRATION_STATE_DIRS
+
+
+def is_runtime_entry(name: str) -> bool:
+    """True for live-process files (locks, sockets, pid files, sidecars)."""
+    return name in _RUNTIME_ENTRIES or name.endswith(_RUNTIME_SUFFIXES)
+
+
+def is_split_home() -> bool:
+    """True when both default homes hold product state (a split install).
+
+    Always False under ``TOKENPAK_HOME``: a scoped home is a closed world.
+    """
+    if os.environ.get(ENV_VAR, "").strip():
+        return False
+    return _holds_state(canonical_home()) and _holds_state(legacy_home())
+
+
+#: Receipt ``tokenpak home migrate --apply`` leaves in the canonical home. It
+#: records that a migration finished so ``doctor`` can tell a deliberately kept
+#: legacy home from a split one. It is not product state: it is never carried
+#: between homes and does not count towards :func:`_holds_state`.
+MIGRATION_RECEIPT = "home-migrated.json"
+
+
+def migration_receipt_path() -> Path:
+    """Where the migration receipt lives (always the canonical home)."""
+    return canonical_home() / MIGRATION_RECEIPT
+
+
+def read_migration_receipt() -> Optional[dict[str, Any]]:
+    """The migration receipt, or ``None`` when absent or unreadable."""
+    import json
+
+    try:
+        data = json.loads(migration_receipt_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def is_migrated_home() -> bool:
+    """True for a split install that ``tokenpak home migrate --apply`` has handled.
+
+    Both homes still hold state (the legacy one is kept as a backup), and a
+    receipt says the merge ran. This does not say the legacy home is quiet: see
+    :func:`legacy_written_since_migration`.
+    """
+    return is_split_home() and read_migration_receipt() is not None
+
+
+def legacy_written_since_migration(limit: int = 5) -> list[str]:
+    """Product-state files in the legacy home modified after the receipt, if any."""
+    receipt = read_migration_receipt()
+    if receipt is None:
+        return []
+    try:
+        since = float(receipt["epoch"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    legacy = legacy_home()
+    newer: list[str] = []
+
+    def visit(path: Path, rel: str) -> None:
+        if len(newer) >= limit or is_runtime_entry(path.name) or path.is_symlink():
+            return
+        try:
+            if path.is_dir():
+                for child in sorted(path.iterdir()):
+                    visit(child, f"{rel}/{child.name}")
+            elif not path.name.endswith(".log") and path.stat().st_mtime > since:
+                newer.append(rel)
+        except OSError:
+            return
+
+    for name in sorted(product_state_names()):
+        entry = legacy / name
+        if entry.exists() or entry.is_symlink():
+            visit(entry, name)
+    return newer
+
+
 def _holds_state(path: Path) -> bool:
     """True when *path* holds state this install wrote.
 
@@ -726,6 +924,13 @@ __all__ = [
     "has_legacy",
     "has_canonical",
     "needs_migration",
+    "is_split_home",
+    "is_migrated_home",
+    "legacy_written_since_migration",
+    "migration_receipt_path",
+    "read_migration_receipt",
+    "product_state_names",
+    "is_runtime_entry",
     "companion_file",
     "companion_read_dirs",
     "companion_run_dir",

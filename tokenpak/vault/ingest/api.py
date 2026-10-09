@@ -24,6 +24,8 @@ from typing import Any, List, Optional, cast
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field, field_validator
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -31,7 +33,7 @@ logger = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 
 VAULT_ENTRIES_DIR = Path(
-    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", "~/.tokenpak/entries"))
+    os.path.expanduser(os.environ.get("TOKENPAK_ENTRIES_DIR", str(_paths.write_home() / "entries")))
 )
 
 

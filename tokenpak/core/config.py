@@ -36,7 +36,7 @@ def _config_json_path() -> Path:
     try:
         from tokenpak import _paths
     except Exception:
-        return Path(os.path.expanduser("~/.tokenpak/config.json"))
+        return _paths.write_home() / "config.json"
     resolved = _paths.home() / "config.json"
     if resolved.exists():
         return resolved

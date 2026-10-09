@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import queue
 import threading
 import uuid
@@ -33,6 +32,8 @@ from datetime import datetime, timezone
 from io import TextIOWrapper
 from pathlib import Path
 from typing import Any, Dict, Optional, Protocol
+
+from tokenpak import _paths
 
 # ---------------------------------------------------------------------------
 # Module-level standard logger (for internal errors only)
@@ -42,7 +43,7 @@ _log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Log directory
 # ---------------------------------------------------------------------------
-_LOG_DIR = Path(os.path.expanduser("~/.tokenpak/logs"))
+_LOG_DIR = _paths.write_home() / "logs"
 
 # ---------------------------------------------------------------------------
 # Level constants

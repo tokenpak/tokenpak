@@ -35,7 +35,9 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence, Tuple
 
-STATS_PATH = Path.home() / ".tokenpak" / "workflow_stats.json"
+from tokenpak import _paths
+
+STATS_PATH = _paths.write_home() / "workflow_stats.json"
 MAX_HISTORY = 1_000  # cap per-template execution history
 
 

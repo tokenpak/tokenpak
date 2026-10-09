@@ -28,9 +28,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, cast
 
+from tokenpak import _paths
+
 # ── Constants ─────────────────────────────────────────────────────────────────
 
-_BLOB_DIR = Path.home() / ".tokenpak" / "debug"
+_BLOB_DIR = _paths.write_home() / "debug"
 _KEY_FILE = _BLOB_DIR / ".key"
 
 _MAGIC = b"TPKD"

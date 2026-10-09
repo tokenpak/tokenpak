@@ -37,7 +37,7 @@ def _default_monitor_db() -> str:
             return str(resolved)
         return str(_paths.canonical_home() / "monitor.db")
     except Exception:
-        return os.path.expanduser("~/.tpk/monitor.db")
+        return str(_paths.write_home() / "monitor.db")
 
 
 def _monitor_db() -> str:

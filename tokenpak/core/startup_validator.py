@@ -16,18 +16,19 @@ from __future__ import annotations
 import logging
 import sys
 from pathlib import Path
+from typing import Optional
+
+from tokenpak import _paths
 
 logger = logging.getLogger("tokenpak.startup")
 
 
-def validate_on_startup(
-    config_path: str = "~/.tokenpak/config.yaml", warn_only: bool = True
-) -> bool:
+def validate_on_startup(config_path: Optional[str] = None, warn_only: bool = True) -> bool:
     """
     Validate config at proxy startup.
 
     Args:
-        config_path: Path to config file (default: ~/.tokenpak/config.yaml)
+        config_path: Path to config file (default: config.yaml in the TokenPak home)
         warn_only: If True, log warnings but don't block startup. If False, raise on errors.
 
     Returns:
@@ -35,6 +36,8 @@ def validate_on_startup(
     """
     from tokenpak.cli_validate_config import format_errors, validate_config_file
 
+    if config_path is None:
+        config_path = str(_paths.write_home() / "config.yaml")
     expanded_path = str(Path(config_path).expanduser())
 
     try:

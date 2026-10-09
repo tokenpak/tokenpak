@@ -5,6 +5,8 @@ from __future__ import annotations
 import os
 import sys
 
+from tokenpak import _paths
+
 
 def _get_indexer():
     """Lazy import to keep startup fast."""
@@ -13,7 +15,7 @@ def _get_indexer():
 
     store_path = os.environ.get(
         "TOKENPAK_VAULT_INDEX",
-        os.path.expanduser("~/.tokenpak/vault_index.json"),
+        str(_paths.write_home() / "vault_index.json"),
     )
     os.makedirs(os.path.dirname(store_path), exist_ok=True)
     return VaultIndexer(block_store=BlockStore(store_path))

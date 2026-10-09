@@ -18,6 +18,8 @@ import sys
 from pathlib import Path
 from typing import TYPE_CHECKING, Optional
 
+from tokenpak import _paths
+
 from .._python_spawn import python_spawn_prefix
 
 if TYPE_CHECKING:
@@ -146,8 +148,6 @@ def get_env_vars(config: "CompanionConfig") -> dict[str, str]:
         env["TOKENPAK_COMPANION_BUDGET"] = str(config.budget_daily_usd)
     if config.profile != "balanced":
         env["TOKENPAK_COMPANION_PROFILE"] = config.profile
-    if str(config.journal_dir) != str(
-        config.journal_dir.__class__.home() / ".tokenpak" / "companion"
-    ):
+    if str(config.journal_dir) != str(_paths.companion_write_dir()):
         env["TOKENPAK_COMPANION_JOURNAL_DIR"] = str(config.journal_dir)
     return env

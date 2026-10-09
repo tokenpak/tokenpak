@@ -7,7 +7,6 @@ State is persisted to disk after each mutation so crashes are recoverable.
 from __future__ import annotations
 
 import json
-import os
 import time
 import uuid
 from dataclasses import asdict, dataclass, field
@@ -15,7 +14,9 @@ from enum import Enum
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DEFAULT_WORKFLOW_DIR = Path(os.path.expanduser("~/.tokenpak/workflows"))
+from tokenpak import _paths
+
+DEFAULT_WORKFLOW_DIR = _paths.write_home() / "workflows"
 
 
 class StepStatus(str, Enum):

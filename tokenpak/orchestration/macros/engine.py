@@ -34,12 +34,14 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, cast
 
+from tokenpak import _paths
+
 try:
     import yaml
 except ImportError:
     yaml = None
 
-MACROS_DIR = Path.home() / ".tokenpak" / "macros"
+MACROS_DIR = _paths.write_home() / "macros"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────

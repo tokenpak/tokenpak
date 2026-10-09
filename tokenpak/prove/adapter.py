@@ -61,6 +61,8 @@ from typing import Protocol, TextIO, TypedDict, cast
 import httpx
 import yaml
 
+from tokenpak import _paths
+
 # ── Data classes ────────────────────────────────────────────────────────
 
 
@@ -213,7 +215,7 @@ _BUILTIN_PROVIDERS: dict[str, _ProviderConfig] = {
     },
 }
 
-_USER_CONFIG_PATH = Path.home() / ".tokenpak" / "prove" / "providers.yaml"
+_USER_CONFIG_PATH = _paths.write_home() / "prove" / "providers.yaml"
 _user_providers: dict[str, _ProviderConfig] | None = None
 
 

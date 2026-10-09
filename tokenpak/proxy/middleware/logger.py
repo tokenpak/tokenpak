@@ -20,6 +20,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from typing import Literal, Optional
 
+from tokenpak import _paths
+
 LogLevel = Literal["debug", "info", "warn", "error"]
 Destination = Literal["file", "stdout", "syslog"]
 
@@ -76,8 +78,7 @@ class LoggingConfig:
         """Resolve log directory path."""
         if self.log_dir:
             return self.log_dir
-        home = os.path.expanduser("~")
-        return os.path.join(home, ".tokenpak", "logs")
+        return str(_paths.write_home() / "logs")
 
 
 class AsyncLogger:

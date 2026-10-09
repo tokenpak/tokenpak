@@ -30,9 +30,11 @@ import subprocess
 from pathlib import Path
 from typing import Mapping, Optional, TypedDict
 
+from tokenpak import _paths
+
 logger = logging.getLogger(__name__)
 
-DEFAULT_HOOKS_DIR = Path.home() / ".tokenpak" / "hooks"
+DEFAULT_HOOKS_DIR = _paths.write_home() / "hooks"
 
 # Hook names and their descriptions
 HOOK_NAMES = {
@@ -129,7 +131,7 @@ def install_hook(hook_name: str, script_content: Optional[str] = None) -> Path:
 # Example: read context with: context=$(cat)
 
 context=$(cat)
-echo "[tokenpak:{hook_name}] $context" >> ~/.tokenpak/hooks/{hook_name}.log
+echo "[tokenpak:{hook_name}] $context" >> "{path.parent}/{hook_name}.log"
 """
 
     path.write_text(script_content)
