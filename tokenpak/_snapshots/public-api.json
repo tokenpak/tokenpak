@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-27T17:02:11Z",
-  "package_version": "1.30.0",
+  "generated_at": "2026-10-09T04:53:21Z",
+  "package_version": "1.31.0",
   "symbols": [
     {
       "module": "tokenpak",
@@ -1004,6 +1004,50 @@
       "name": "cmd_home_validate"
     },
     {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "CONFLICT"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "COPY"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "Item"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "KEEP_LEGACY"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "LINK"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "MERGE"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "SKIP_IDENTICAL"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "add_arguments"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "build"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "busy_reasons"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "run"
+    },
+    {
       "module": "tokenpak.cli.commands.index",
       "name": "run_index_path"
     },
@@ -1624,6 +1668,50 @@
       "name": "run_uninstall"
     },
     {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "EXIT_BUSY"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "EXIT_FAILURE"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "EXIT_MISSING_PREREQUISITE"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "EXIT_OK"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "PROBE_INTERVAL_SECONDS"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "add_parser"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "busy_reason"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "established_connections"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "idle_gate"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "run"
+    },
+    {
+      "module": "tokenpak.cli.commands.update_apply",
+      "name": "sample"
+    },
+    {
       "module": "tokenpak.cli.commands.upgrade",
       "name": "DEFAULT_UPGRADE_URL"
     },
@@ -1746,6 +1834,10 @@
     {
       "module": "tokenpak.cli.demo",
       "name": "seed_demo_data"
+    },
+    {
+      "module": "tokenpak.cli.exit_codes",
+      "name": "EXIT_BUSY"
     },
     {
       "module": "tokenpak.cli.exit_codes",
@@ -5462,6 +5554,26 @@
     {
       "module": "tokenpak.core.runtime.proxy",
       "name": "inject_vault_context"
+    },
+    {
+      "module": "tokenpak.core.runtime.update_pending",
+      "name": "PendingUpdate"
+    },
+    {
+      "module": "tokenpak.core.runtime.update_pending",
+      "name": "cached_detect"
+    },
+    {
+      "module": "tokenpak.core.runtime.update_pending",
+      "name": "detect"
+    },
+    {
+      "module": "tokenpak.core.runtime.update_pending",
+      "name": "marker_path"
+    },
+    {
+      "module": "tokenpak.core.runtime.update_pending",
+      "name": "stack_units"
     },
     {
       "module": "tokenpak.core.schemas",
@@ -14429,6 +14541,10 @@
     },
     {
       "module": "tokenpak.status.worker",
+      "name": "cached_detect"
+    },
+    {
+      "module": "tokenpak.status.worker",
       "name": "current_session"
     },
     {
@@ -14438,6 +14554,10 @@
     {
       "module": "tokenpak.status.worker",
       "name": "main"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "pending_version"
     },
     {
       "module": "tokenpak.status.worker",
