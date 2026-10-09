@@ -257,7 +257,7 @@ def _merge_db(snapshot: Path, dest: sqlite3.Connection) -> tuple[Optional[str], 
         theirs = _tables(src)
         ours = _tables(dest)
         if any(m["virtual"] for m in theirs.values()):
-            return "virtual tables cannot be merged", 0
+            return _VIRTUAL, 0
         if set(theirs) != set(ours):
             return "table set differs", 0
         for name, meta in theirs.items():
@@ -326,6 +326,70 @@ def _merge_table(
     return dest.total_changes - before
 
 
+_VIRTUAL = "virtual tables cannot be merged"
+
+
+def _digest(conn: sqlite3.Connection) -> dict[str, tuple[Any, ...]]:
+    """Order-independent content digest of every real table (shadow tables included)."""
+    out: dict[str, tuple[Any, ...]] = {}
+    for name, meta in _tables(conn).items():
+        if meta["virtual"]:
+            continue  # its content lives in the shadow tables, which are real tables
+        hashes = sorted(
+            hashlib.blake2b(repr(row).encode(), digest_size=16).digest()
+            for row in conn.execute(f"SELECT * FROM {_quote(name)}")
+        )
+        top = hashlib.blake2b(b"".join(hashes), digest_size=16).digest()
+        out[name] = (tuple(c[0] for c in meta["cols"]), len(hashes), top)
+    return out
+
+
+def _digest_path(path: Path) -> dict[str, tuple[Any, ...]]:
+    conn = sqlite3.connect(str(path))
+    try:
+        return _digest(conn)
+    finally:
+        conn.close()
+
+
+def _virtual_table_db(snap: Path, dest: Path, rel: str, ctx: _Ctx, same: bool) -> Item:
+    """A database with virtual tables is not merged row by row.
+
+    Identical content is already migrated (SKIP-identical). Otherwise the
+    canonical database is kept and the legacy one is saved beside it, as for any
+    other file that differs.
+    """
+    if same:
+        return Item(rel, SKIP_IDENTICAL, "same content")
+    side = dest.with_name(dest.name + _LEGACY_SUFFIX)
+    detail = f"{_VIRTUAL}; canonical kept, legacy copy beside it as {side.name}"
+    if side.exists() and _is_sqlite_content(side) and _digest_path(side) == _digest_path(snap):
+        return Item(rel, CONFLICT, detail)
+    if ctx.apply:
+        _backup(side, ctx)
+        reader = sqlite3.connect(str(snap))
+        try:
+            tmp = side.with_name(f".{side.name}.migrate-tmp")
+            writer = sqlite3.connect(str(tmp))
+            try:
+                reader.backup(writer)
+            finally:
+                writer.close()
+        finally:
+            reader.close()
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, side)
+    return Item(rel, CONFLICT, detail)
+
+
+def _is_sqlite_content(path: Path) -> bool:
+    try:
+        with open(path, "rb") as handle:
+            return handle.read(16) == _SQLITE_MAGIC
+    except OSError:
+        return False
+
+
 def _check_unlocked(path: Path) -> None:
     """Raise :class:`_Busy` when another connection holds a write lock on *path*."""
     try:
@@ -372,12 +436,18 @@ def _process_sqlite(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
     try:
         try:
             reason, added = _merge_db(snap, conn)
+            if reason == _VIRTUAL:
+                same = _digest(conn) == _digest_path(snap)
+            else:
+                same = False
         except sqlite3.OperationalError as error:
             if ctx.apply:
                 raise _Busy(f"{dest.name} is locked ({error})") from error
             raise
     finally:
         conn.close()
+    if reason == _VIRTUAL:
+        return _virtual_table_db(snap, dest, rel, ctx, same)
     if reason:
         return Item(rel, CONFLICT, f"{reason}; nothing copied")
     if added == 0:
@@ -470,14 +540,21 @@ def _merge_lines(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
 def _process_link(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
     """Recreate a symbolic link in the canonical home. Never follows or copies through it.
 
-    A relative target is resolved against the directory the link sits in and
-    recreated as an absolute link, so it keeps pointing at the same file.
+    A relative target that stays inside the legacy home is recreated exactly as
+    written, so it points at the migrated sibling. One that leaves the legacy
+    home is resolved against the directory the link sits in and recreated as an
+    absolute link, so it keeps pointing at the same file.
     """
     target = os.readlink(src)
     note = ""
     if not os.path.isabs(target):
-        target = os.path.normpath(os.path.join(os.path.dirname(src), target))
-        note = " (relative target made absolute)"
+        resolved = os.path.normpath(os.path.join(os.path.dirname(src), target))
+        legacy_root = os.path.normpath(str(ctx.legacy))
+        if resolved == legacy_root or resolved.startswith(legacy_root + os.sep):
+            note = " (relative, stays inside the home)"  # keep the link as written
+        else:
+            target = resolved
+            note = " (relative target made absolute)"
     if os.path.lexists(dest):
         if dest.is_symlink() and os.readlink(dest) == target:
             return Item(rel, SKIP_IDENTICAL, f"same link -> {target}")

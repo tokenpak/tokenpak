@@ -360,17 +360,6 @@ def test_symlink_is_recreated_not_followed(homes, tmp_path, capsys):
     assert items["monitor.db"]["action"] == "SKIP-identical"
 
 
-def test_relative_symlink_becomes_absolute(homes, capsys):
-    legacy, canonical = homes
-    (legacy / "data").mkdir()
-    (legacy / "data" / "real.db").write_bytes(b"not a database")
-    (legacy / "monitor.db").symlink_to("data/real.db")
-    assert run(apply=True) == 0
-    target = os.readlink(canonical / "monitor.db")
-    assert target == str(legacy / "data" / "real.db")
-    assert "relative target made absolute" in capsys.readouterr().out
-
-
 def test_symlink_conflict_with_different_entry(homes, tmp_path, capsys):
     legacy, canonical = homes
     (legacy / "monitor.db").symlink_to(tmp_path / "a.db")
@@ -384,3 +373,73 @@ def test_symlink_conflict_with_different_entry(homes, tmp_path, capsys):
     assert run(apply=True) == 0
     assert os.readlink(canonical / "monitor.db") == str(tmp_path / "b.db")
     assert (canonical / "telemetry.db").read_bytes() == b"plain file"
+
+
+def test_relative_symlink_inside_home_stays_relative(homes, capsys):
+    legacy, canonical = homes
+    cap = legacy / "companion" / "capsules"
+    cap.mkdir(parents=True)
+    (cap / "abc.md").write_text("capsule")
+    (cap / "active.md").symlink_to("abc.md")
+    assert run(apply=True) == 0
+    link = canonical / "companion" / "capsules" / "active.md"
+    assert os.readlink(link) == "abc.md"
+    assert link.resolve() == (canonical / "companion" / "capsules" / "abc.md").resolve()
+    assert "stays inside the home" in capsys.readouterr().out
+    items = _items(capsys)
+    assert items["companion/capsules/active.md"]["action"] == "SKIP-identical"
+
+
+def test_relative_symlink_escaping_home_becomes_absolute(homes, tmp_path):
+    legacy, canonical = homes
+    (tmp_path / "outside.db").write_bytes(b"x")
+    (legacy / "monitor.db").symlink_to("../outside.db")
+    assert run(apply=True) == 0
+    assert os.readlink(canonical / "monitor.db") == str(tmp_path / "outside.db")
+
+
+FTS = """
+CREATE TABLE docs (id INTEGER PRIMARY KEY, body TEXT);
+CREATE VIRTUAL TABLE docs_fts USING fts5(body);
+"""
+
+
+def _fts_db(path: Path, bodies: list[str]):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.executescript(FTS)
+    for b in bodies:
+        conn.execute("INSERT INTO docs (body) VALUES (?)", (b,))
+        conn.execute("INSERT INTO docs_fts (body) VALUES (?)", (b,))
+    conn.commit()
+    conn.close()
+
+
+def test_virtual_table_db_copies_then_rerun_is_identical(homes, capsys):
+    legacy, canonical = homes
+    _fts_db(legacy / "companion" / "recall.db", ["alpha", "beta"])
+    assert run(apply=True) == 0
+    capsys.readouterr()
+    items = _items(capsys)
+    assert items["companion/recall.db"]["action"] == "SKIP-identical"
+    assert run(apply=True) == 0
+    assert not (canonical / "companion" / "recall.db.legacy").exists()
+
+
+def test_virtual_table_db_diverged_keeps_canonical_and_writes_legacy(homes, capsys):
+    legacy, canonical = homes
+    _fts_db(legacy / "companion" / "recall.db", ["alpha", "beta"])
+    _fts_db(canonical / "companion" / "recall.db", ["alpha", "gamma"])
+    before = tree_hash(legacy)
+    items = _items(capsys)
+    assert items["companion/recall.db"]["action"] == "CONFLICT"
+    assert not (canonical / "companion" / "recall.db.legacy").exists()  # dry run
+    assert run(apply=True) == 0
+    assert tree_hash(legacy) == before
+    assert count(canonical / "companion" / "recall.db", "docs") == 2
+    side = canonical / "companion" / "recall.db.legacy"
+    conn = sqlite3.connect(side)
+    assert sorted(r[0] for r in conn.execute("SELECT body FROM docs")) == ["alpha", "beta"]
+    conn.close()
+    capsys.readouterr()
+    assert run(apply=True) == 0  # rerun does not rewrite the same legacy copy
