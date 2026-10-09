@@ -1,9 +1,9 @@
 # SPDX-License-Identifier: Apache-2.0
 """``tokenpak home migrate`` — consolidate a split home, merging and never overwriting.
 
-An install can end up with state in both ``~/.tokenpak`` (legacy) and ``~/.tpk``
-(canonical): a companion that started writing the canonical home while the
-proxy stayed on the legacy one. This module merges the legacy home into the
+An install can end up with state in both the legacy home and the canonical
+home: a companion that started writing the canonical home while the proxy
+stayed on the legacy one. This module merges the legacy home into the
 canonical one.
 
 Rules, in one place:
@@ -758,8 +758,8 @@ def run(args: Any) -> int:
     if os.environ.get(_paths.ENV_VAR, "").strip():
         print(f"✗ tokenpak home migrate - {_paths.ENV_VAR} is set.", file=sys.stderr)
         print(
-            "\n  This command moves state between the two default homes (~/.tokenpak and "
-            "~/.tpk),\n  and a custom home is a separate install.\n"
+            f"\n  This command moves state between the two default homes (~/{_paths.LEGACY_DIRNAME} and "
+            f"~/{_paths.CANONICAL_DIRNAME}),\n  and a custom home is a separate install.\n"
             f"  Unset it and run again: env -u {_paths.ENV_VAR} tokenpak home migrate",
             file=sys.stderr,
         )
