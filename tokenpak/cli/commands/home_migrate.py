@@ -814,6 +814,11 @@ def run(args: Any) -> int:
         return EXIT_FAILURE
 
     counts = _summary(items)
+    if apply:
+        try:
+            _write_receipt(legacy, canonical, counts)
+        except OSError as error:
+            print(f"Note: could not write the migration receipt ({error}).", file=sys.stderr)
     if as_json:
         print(
             json.dumps(
@@ -854,6 +859,27 @@ def run(args: Any) -> int:
             print(f"\nNote: --apply would be refused right now: {note}.")
         print("\nRe-run with --apply to write these changes.")
     return EXIT_OK
+
+
+def _write_receipt(legacy: Path, canonical: Path, counts: dict[str, int]) -> None:
+    """Record a finished ``--apply`` in the canonical home (0600, atomic)."""
+    from tokenpak import __version__, _paths
+
+    now = time.time()
+    body = {
+        "migrated_at_utc": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(now)),
+        "epoch": now,
+        "source": str(legacy),
+        "target": str(canonical),
+        "summary": counts,
+        "tokenpak_version": __version__,
+    }
+    canonical.mkdir(mode=0o700, parents=True, exist_ok=True)
+    path = _paths.migration_receipt_path()
+    tmp = path.with_name(f".{path.name}.tmp")
+    tmp.write_text(json.dumps(body, indent=2) + "\n", encoding="utf-8")
+    os.chmod(tmp, 0o600)
+    os.replace(tmp, path)
 
 
 def add_arguments(parser: Any) -> None:

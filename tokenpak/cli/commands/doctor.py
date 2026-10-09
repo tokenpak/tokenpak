@@ -813,6 +813,32 @@ def run_doctor(
                 "state to ~/.tpk/ (non-destructive, backup-first)."
             ),
         )
+    elif _paths.is_migrated_home():
+        receipt = _paths.read_migration_receipt() or {}
+        when = str(receipt.get("migrated_at_utc", "an earlier run"))
+        newer = _paths.legacy_written_since_migration()
+        if newer:
+            _record(
+                "home_boundary",
+                "warn",
+                "~/.tpk/ boundary    legacy home written after migration",
+                detail=(
+                    f"Something wrote to {_paths.legacy_home()} after the migration on "
+                    f"{when} (for example {', '.join(newer[:3])}). Run "
+                    "`tokenpak home migrate` to see what is new, then "
+                    "`tokenpak home migrate --apply`."
+                ),
+            )
+        else:
+            _record(
+                "home_boundary",
+                "pass",
+                f"~/.tpk/ boundary    migrated on {when}",
+                detail=(
+                    f"The legacy home {_paths.legacy_home()} is kept as a backup and "
+                    "can be removed after you are satisfied."
+                ),
+            )
     elif _paths.is_split_home():
         _record(
             "home_boundary",

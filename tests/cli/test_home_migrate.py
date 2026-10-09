@@ -443,3 +443,58 @@ def test_virtual_table_db_diverged_keeps_canonical_and_writes_legacy(homes, caps
     conn.close()
     capsys.readouterr()
     assert run(apply=True) == 0  # rerun does not rewrite the same legacy copy
+
+
+def _boundary(capsys):
+    from tokenpak.cli.commands.doctor import run_doctor
+
+    run_doctor(output_json=True)
+    out = capsys.readouterr().out
+    data = json.loads(out[out.index("{") :])
+    checks = data["checks"]
+    rows = checks.values() if isinstance(checks, dict) else checks
+    return next(
+        c
+        for c in rows
+        if c.get("name") == "home_boundary" or "boundary" in str(c.get("message", ""))
+    )
+
+
+def _split_fixture(legacy, canonical):
+    (legacy / "config.yaml").write_text("a: 1\n")
+    canonical.mkdir()
+    (canonical / "config.yaml").write_text("a: 2\n")
+
+
+def test_receipt_written_only_on_successful_apply(homes, monkeypatch):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    assert run() == 0  # dry run
+    assert not _paths.migration_receipt_path().exists()
+    monkeypatch.setattr(home_migrate, "busy_reasons", lambda *a, **k: ["busy"])
+    assert run(apply=True) == EXIT_BUSY
+    assert not _paths.migration_receipt_path().exists()
+    monkeypatch.setattr(home_migrate, "busy_reasons", lambda *a, **k: [])
+    assert run(apply=True) == 0
+    receipt = _paths.read_migration_receipt()
+    assert receipt and receipt["source"] == str(legacy) and receipt["summary"]
+    assert stat.S_IMODE(_paths.migration_receipt_path().stat().st_mode) == 0o600
+    assert _paths.is_migrated_home() and _paths.is_split_home()
+
+
+def test_doctor_split_then_migrated_info_then_newer_legacy_warning(homes, capsys):
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    row = _boundary(capsys)
+    assert row["status"] == "warn" and "split home" in row["message"]
+    assert run(apply=True) == 0
+    capsys.readouterr()
+    row = _boundary(capsys)
+    assert row["status"] == "pass" and "migrated on" in row["message"]
+    future = os.path.getmtime(canonical / "home-migrated.json") + 100
+    os.utime(legacy / "config.yaml", (future, future))
+    row = _boundary(capsys)
+    assert row["status"] == "warn" and "after migration" in row["message"]
+    assert "tokenpak home migrate" in row.get("detail", "")

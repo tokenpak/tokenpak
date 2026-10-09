@@ -119,6 +119,10 @@ file it changes is backed up first under
 `~/.tpk/backups/home-migrate-<time>/`. It refuses, and changes nothing,
 while the proxy or a companion session is in use.
 
+A successful `--apply` leaves a small receipt, `~/.tpk/home-migrated.json`.
+`tokenpak doctor` then reports the migration instead of a split home, and
+warns again only if something writes to `~/.tokenpak/` afterwards.
+
 The original `~/.tokenpak/` directory is never modified or removed.
 Remove it yourself once you've run from `~/.tpk/` for a while and are
 satisfied.

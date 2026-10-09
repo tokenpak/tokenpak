@@ -265,6 +265,70 @@ def is_split_home() -> bool:
     return _holds_state(canonical_home()) and _holds_state(legacy_home())
 
 
+#: Receipt ``tokenpak home migrate --apply`` leaves in the canonical home. It
+#: records that a migration finished so ``doctor`` can tell a deliberately kept
+#: legacy home from a split one. It is not product state: it is never carried
+#: between homes and does not count towards :func:`_holds_state`.
+MIGRATION_RECEIPT = "home-migrated.json"
+
+
+def migration_receipt_path() -> Path:
+    """Where the migration receipt lives (always the canonical home)."""
+    return canonical_home() / MIGRATION_RECEIPT
+
+
+def read_migration_receipt() -> Optional[dict[str, Any]]:
+    """The migration receipt, or ``None`` when absent or unreadable."""
+    import json
+
+    try:
+        data = json.loads(migration_receipt_path().read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def is_migrated_home() -> bool:
+    """True for a split install that ``tokenpak home migrate --apply`` has handled.
+
+    Both homes still hold state (the legacy one is kept as a backup), and a
+    receipt says the merge ran. This does not say the legacy home is quiet: see
+    :func:`legacy_written_since_migration`.
+    """
+    return is_split_home() and read_migration_receipt() is not None
+
+
+def legacy_written_since_migration(limit: int = 5) -> list[str]:
+    """Product-state files in the legacy home modified after the receipt, if any."""
+    receipt = read_migration_receipt()
+    if receipt is None:
+        return []
+    try:
+        since = float(receipt["epoch"])
+    except (KeyError, TypeError, ValueError):
+        return []
+    legacy = legacy_home()
+    newer: list[str] = []
+
+    def visit(path: Path, rel: str) -> None:
+        if len(newer) >= limit or is_runtime_entry(path.name) or path.is_symlink():
+            return
+        try:
+            if path.is_dir():
+                for child in sorted(path.iterdir()):
+                    visit(child, f"{rel}/{child.name}")
+            elif not path.name.endswith(".log") and path.stat().st_mtime > since:
+                newer.append(rel)
+        except OSError:
+            return
+
+    for name in sorted(product_state_names()):
+        entry = legacy / name
+        if entry.exists() or entry.is_symlink():
+            visit(entry, name)
+    return newer
+
+
 def _holds_state(path: Path) -> bool:
     """True when *path* holds state this install wrote.
 
@@ -861,6 +925,10 @@ __all__ = [
     "has_canonical",
     "needs_migration",
     "is_split_home",
+    "is_migrated_home",
+    "legacy_written_since_migration",
+    "migration_receipt_path",
+    "read_migration_receipt",
     "product_state_names",
     "is_runtime_entry",
     "companion_file",
