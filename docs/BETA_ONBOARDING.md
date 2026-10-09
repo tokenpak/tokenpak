@@ -58,10 +58,10 @@ tokenpak home path
 Expected output (fresh install):
 
 ```
-TokenPak home : /home/you/.tpk
+TokenPak home : ~/.tpk
 Resolved by   : canonical   (or "default" if directory doesn't exist yet)
-Canonical     : /home/you/.tpk          (present: False)
-Legacy        : /home/you/.tokenpak     (present: False)
+Canonical     : ~/.tpk          (present: False)
+Legacy        : ~/.tokenpak     (present: False)
 ```
 
 If you see `⚠️  Legacy ~/.tokenpak/ is in use`, jump to step 3
@@ -74,7 +74,7 @@ tokenpak home init
 Expected output:
 
 ```
-✅ Wrote starter config → /home/you/.tpk/config.json
+✅ Wrote starter config → ~/.tpk/config.json
 
 Next steps:
   • tokenpak home explain  — see every config key
@@ -229,7 +229,7 @@ Install the Pak into your local store:
 tokenpak pak import /tmp/my.pak.json
 ```
 
-Expected: `✅ Imported Pak pak:abc123… → /home/you/.tpk/paks/...`
+Expected: `✅ Imported Pak pak:abc123… → ~/.tpk/paks/...`
 
 After import you can inspect by Pak id (no file path needed):
 
@@ -418,8 +418,8 @@ arrive full of colour codes.
 These are already recorded, so you can skip them and we will not waste your time
 re-triaging:
 
-- `tokenpak version` prints a config path under `~/.tokenpak/` and a lock path under
-  `~/vault/System/`. Both are stale strings from an older layout; the state it reports is
+- `tokenpak version` prints a config path and a lock path from an older layout. Both
+  are stale strings; the state it reports is
   correct, and the path it names is not where your config lives. `tokenpak doctor` and
   `tokenpak status` both report the real location.
 - Some commands still create a `~/.tokenpak/` directory alongside the current `~/.tpk/` one,
