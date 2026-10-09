@@ -14,8 +14,9 @@ Subcommands:
                          shape problems (missing keys, bad types).
     explain              Show every config key the install knows about
                          + its current value + where it came from.
-    migrate              Backup-first move from ``~/.tokenpak/`` →
-                         ``~/.tpk/`` (never destructive; never blind).
+    migrate              Merge ``~/.tokenpak/`` into ``~/.tpk/``: dry run by
+                         default, ``--apply`` to write, backup-first, never
+                         modifies or removes the legacy home.
 
 The Pro daemon coordination layout lives under
 ``<home>/pro/`` and is intentionally not touched by these commands.
@@ -24,7 +25,6 @@ The Pro daemon coordination layout lives under
 from __future__ import annotations
 
 import json
-import shutil
 import sys
 from pathlib import Path
 from typing import Any
@@ -69,26 +69,19 @@ def build_home_parser(sub: Any) -> None:
 
     p_migrate = csub.add_parser(
         "migrate",
-        help="Backup-first migrate ~/.tokenpak/ → ~/.tpk/",
+        help="Merge the legacy ~/.tokenpak/ home into ~/.tpk/ (dry run by default)",
         description=(
-            "Copy the legacy ~/.tokenpak/ tree to the canonical ~/.tpk/ "
-            "location. The legacy tree is left in place as a safety "
-            "backup; you can prune it manually once satisfied."
+            "Merge TokenPak state from the legacy ~/.tokenpak/ home into the "
+            "canonical ~/.tpk/ home. Prints a plan by default; --apply writes it. "
+            "Databases are merged row by row, files that differ keep the canonical "
+            "copy with the legacy one saved beside it as <name>.legacy, and every "
+            "changed target is backed up first. The legacy home is never modified "
+            "or removed. Refuses while the proxy or a companion session is in use."
         ),
     )
-    p_migrate.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show what would be copied without writing anything",
-    )
-    p_migrate.add_argument(
-        "--force",
-        action="store_true",
-        help=(
-            "Allow merging into an existing ~/.tpk/ (default: refuse "
-            "and report what to do manually)"
-        ),
-    )
+    from tokenpak.cli.commands import home_migrate as _home_migrate
+
+    _home_migrate.add_arguments(p_migrate)
     p_migrate.set_defaults(func=cmd_home_migrate)
 
     p.set_defaults(func=lambda a: p.print_help())
@@ -245,64 +238,10 @@ def cmd_home_explain(args: Any) -> int:
 
 
 def cmd_home_migrate(args: Any) -> int:
-    """Backup-first non-destructive migration ``~/.tokenpak/`` → ``~/.tpk/``."""
-    from tokenpak import _paths
+    """Merge ``~/.tokenpak/`` into ``~/.tpk/`` (see :mod:`home_migrate`)."""
+    from tokenpak.cli.commands import home_migrate
 
-    legacy = _paths.legacy_home()
-    canonical = _paths.canonical_home()
-
-    if not legacy.exists():
-        print(f"ℹ️  No legacy directory at {legacy}; nothing to migrate.")
-        return 0
-
-    if canonical.exists() and not getattr(args, "force", False):
-        print(f"⚠️  Canonical {canonical} already exists.", file=sys.stderr)
-        print(
-            "   Refusing to merge automatically. Either:\n"
-            f"     - inspect {canonical} and {legacy} and merge manually, OR\n"
-            f"     - re-run with --force to overlay the legacy tree onto the canonical.",
-            file=sys.stderr,
-        )
-        return 1
-
-    plan: list[tuple[str, str]] = []
-    for src in legacy.rglob("*"):
-        if not src.is_file():
-            continue
-        rel = src.relative_to(legacy)
-        dst = canonical / rel
-        plan.append((str(src), str(dst)))
-
-    if getattr(args, "dry_run", False):
-        print(f"Dry run: would copy {len(plan)} file(s) from {legacy} → {canonical}")
-        for s, d in plan[:10]:
-            print(f"  {s} → {d}")
-        if len(plan) > 10:
-            print(f"  … and {len(plan) - 10} more")
-        return 0
-
-    canonical.mkdir(mode=0o700, parents=True, exist_ok=True)
-    copied = 0
-    skipped = 0
-    for s, d in plan:
-        dpath = Path(d)
-        if dpath.exists() and not getattr(args, "force", False):
-            skipped += 1
-            continue
-        dpath.parent.mkdir(parents=True, exist_ok=True)
-        try:
-            shutil.copy2(s, d)
-            copied += 1
-        except OSError as exc:
-            print(f"⚠️  {s}: {exc}", file=sys.stderr)
-            skipped += 1
-
-    print(f"✅ Migrated {copied} file(s) → {canonical}  ({skipped} skipped)")
-    print(
-        f"ℹ️  The legacy tree at {legacy} is untouched; remove it manually "
-        "once you've verified the canonical install works."
-    )
-    return 0
+    return home_migrate.run(args)
 
 
 # ---------------------------------------------------------------------------

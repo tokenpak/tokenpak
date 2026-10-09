@@ -84,7 +84,8 @@ def test_home_migrate_is_non_destructive(tmp_path, monkeypatch, capsys):
     legacy.mkdir()
     (legacy / "config.json").write_text('{"hello": true}')
 
-    ns = argparse.Namespace(dry_run=False, force=False)
+    monkeypatch.setattr("tokenpak.cli.commands.home_migrate.busy_reasons", lambda *a, **k: [])
+    ns = argparse.Namespace(apply=True, as_json=False)
     rc = cmd_home_migrate(ns)
     assert rc == 0
     # canonical now exists with the file

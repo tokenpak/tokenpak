@@ -131,6 +131,81 @@ _STATE_FILES: frozenset[str] = frozenset(
 )
 
 
+#: Product-owned files that migration carries but that must NOT count as
+#: "this home holds state" in :func:`_holds_state`.
+#:
+#: They are kept apart from ``_STATE_FILES`` on purpose. ``_STATE_FILES`` decides
+#: which home an install lives in, so widening it moves reads and writes for
+#: installs that happen to hold only one of these files. Migration needs the
+#: wider question ("did TokenPak write this?") without changing that answer.
+#: Each name below is written by a product module through this resolver or a
+#: ``get_db_path`` lookup; operator material that merely sits in the same
+#: directory is deliberately absent.
+_MIGRATION_STATE_FILES: frozenset[str] = frozenset(
+    {
+        "cost.db",
+        "spend_guard.db",
+        "execution_ledger.db",
+        "routing_ledger.db",
+        "registry.db",
+        "update_check.json",
+        "pricing.json",
+        "dashboard_token",
+        "budget_config.yaml",
+        "vault.yaml",
+        "goals.yaml",
+        "goal_state.json",
+        "instruction_table.json",
+        "compression_dict.json",
+        "compression_events.jsonl",
+        "debug.json",
+    }
+)
+
+#: Product-owned subdirectories that migration carries beyond the layout set.
+_MIGRATION_STATE_DIRS: frozenset[str] = frozenset({"data"})
+
+#: Entries that are live process state (sockets, locks, pid files, tunnel
+#: control sockets). They describe a running process, so they are never carried
+#: to another home.
+_RUNTIME_SUFFIXES: tuple[str, ...] = (
+    ".pid",
+    ".sock",
+    ".lock",
+    ".sock-info",
+    ".tmp",
+    "-wal",
+    "-shm",
+    "-journal",
+)
+_RUNTIME_ENTRIES: frozenset[str] = frozenset({"tunnels", "run", "tmp", "proxy.pid"})
+
+
+def product_state_names() -> frozenset[str]:
+    """Names directly under a home that TokenPak itself writes.
+
+    Derived from the resolver's own registries so migration never keeps a
+    second list: the layout files, the known subdirectories, and the product
+    files and directories only migration needs to know about.
+    """
+    return _STATE_FILES | _MIGRATION_STATE_FILES | _known_subdirs() | _MIGRATION_STATE_DIRS
+
+
+def is_runtime_entry(name: str) -> bool:
+    """True for live-process files (locks, sockets, pid files, sidecars)."""
+    return name in _RUNTIME_ENTRIES or name.endswith(_RUNTIME_SUFFIXES)
+
+
+def is_split_home() -> bool:
+    """True when both default homes hold product state (a split install).
+
+    Always False under ``TOKENPAK_HOME``: a scoped home is a closed world.
+    """
+    if os.environ.get(ENV_VAR, "").strip():
+        return False
+    return _holds_state(canonical_home()) and _holds_state(legacy_home())
+
+
 def _holds_state(path: Path) -> bool:
     """True when *path* holds state this install wrote.
 
@@ -726,6 +801,9 @@ __all__ = [
     "has_legacy",
     "has_canonical",
     "needs_migration",
+    "is_split_home",
+    "product_state_names",
+    "is_runtime_entry",
     "companion_file",
     "companion_read_dirs",
     "companion_run_dir",

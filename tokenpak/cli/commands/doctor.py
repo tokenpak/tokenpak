@@ -813,6 +813,18 @@ def run_doctor(
                 "state to ~/.tpk/ (non-destructive, backup-first)."
             ),
         )
+    elif _paths.is_split_home():
+        _record(
+            "home_boundary",
+            "warn",
+            "~/.tpk/ boundary    split home: both homes hold state",
+            detail=(
+                f"Both {_paths.canonical_home()} and {_paths.legacy_home()} "
+                "hold TokenPak state, so some processes read one and some the "
+                "other. Run `tokenpak home migrate` to see the merge plan "
+                "(dry run), then `tokenpak home migrate --apply`."
+            ),
+        )
     elif _paths.has_legacy() and _paths.has_canonical():
         _record(
             "home_boundary",
