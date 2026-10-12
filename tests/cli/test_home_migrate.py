@@ -498,3 +498,98 @@ def test_doctor_split_then_migrated_info_then_newer_legacy_warning(homes, capsys
     row = _boundary(capsys)
     assert row["status"] == "warn" and "after migration" in row["message"]
     assert "tokenpak home migrate" in row.get("detail", "")
+
+
+def _config_fixture(legacy, canonical, legacy_text, canonical_text):
+    (legacy / "config.yaml").write_text(legacy_text)
+    canonical.mkdir()
+    (canonical / "config.yaml").write_text(canonical_text)
+
+
+def test_config_merge_adds_legacy_only_sections_and_keeps_comments(homes, capsys):
+    import yaml
+
+    legacy, canonical = homes
+    _config_fixture(
+        legacy,
+        canonical,
+        "port: 1\nspend_guard:\n  enabled: true\n  warn_tokens: 5\nproxy:\n  mode: hybrid\n",
+        "# mine\nport: 2\n",
+    )
+    item = _items(capsys)["config.yaml"]
+    assert item["action"] == "MERGE" and "2 settings added: spend_guard, proxy" in item["detail"]
+    assert "canonical kept for port" in item["detail"]
+    assert run(apply=True) == 0
+    text = (canonical / "config.yaml").read_text()
+    assert text.startswith("# mine\nport: 2\n")
+    data = yaml.safe_load(text)
+    assert data["port"] == 2 and data["spend_guard"]["warn_tokens"] == 5
+    assert data["proxy"] == {"mode": "hybrid"}
+    assert (canonical / "config.yaml.legacy").read_text() == (legacy / "config.yaml").read_text()
+    backups = list((canonical / "backups").rglob("config.yaml"))
+    assert [b.read_text() for b in backups] == ["# mine\nport: 2\n"]
+    capsys.readouterr()
+    assert _items(capsys)["config.yaml"]["action"] == "CONFLICT"  # only the differing value left
+
+
+def test_config_merge_nested_keeps_canonical_values(homes, capsys):
+    import yaml
+
+    legacy, canonical = homes
+    _config_fixture(
+        legacy,
+        canonical,
+        "pro:\n  multipak:\n    enabled: false\n  daemon:\n    port: 9\n",
+        "pro:\n  multipak:\n    enabled: true\n",
+    )
+    assert run(apply=True) == 0
+    data = yaml.safe_load((canonical / "config.yaml").read_text())
+    assert data == {"pro": {"multipak": {"enabled": True}, "daemon": {"port": 9}}}
+    capsys.readouterr()
+    assert _items(capsys)["config.yaml"]["action"] == "CONFLICT"
+
+
+def test_config_merge_rerun_is_identical_when_values_agree(homes, capsys):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, "a: 1\nb: 2\n", "a: 1\n")
+    assert run(apply=True) == 0
+    capsys.readouterr()
+    assert _items(capsys)["config.yaml"]["action"] == "SKIP-identical"
+    assert not (canonical / "config.yaml.legacy").exists()
+
+
+def test_config_unparseable_falls_back_to_legacy_copy(homes):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, "a: [1\n", "a: 2\n")
+    assert run(apply=True) == 0
+    assert (canonical / "config.yaml").read_text() == "a: 2\n"
+    assert (canonical / "config.yaml.legacy").read_text() == "a: [1\n"
+
+
+def _doctor_row(capsys, name):
+    from tokenpak.cli.commands.doctor import run_doctor
+
+    run_doctor(output_json=True)
+    out = capsys.readouterr().out
+    checks = json.loads(out[out.index("{") :])["checks"]
+    rows = checks.values() if isinstance(checks, dict) else checks
+    return next((c for c in rows if c.get("check") == name), None)
+
+
+def test_doctor_names_ignored_settings_until_migrated(homes, capsys):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, "a: 1\nspend_guard:\n  enabled: true\n", "a: 1\n")
+    row = _doctor_row(capsys, "home_config")
+    assert row and row["status"] == "warn" and "spend_guard" in row["detail"]
+    assert run(apply=True) == 0
+    capsys.readouterr()
+    assert _doctor_row(capsys, "home_config") is None
+
+
+def test_doctor_quiet_after_migration_when_setting_removed_on_purpose(homes, capsys):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, "a: 1\nb: 2\n", "a: 1\n")
+    assert run(apply=True) == 0
+    (canonical / "config.yaml").write_text("a: 1\n")
+    capsys.readouterr()
+    assert _doctor_row(capsys, "home_config") is None

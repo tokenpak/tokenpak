@@ -870,6 +870,31 @@ def run_doctor(
             f"~/.tpk/ boundary    {tokenpak_dir}",
         )
 
+    # Settings only the legacy config.yaml holds are ignored once the canonical
+    # one exists. Name them, unless a migration already ran and the legacy file
+    # has not changed since (the user may have removed a setting on purpose).
+    if not _paths.is_legacy_active() and not os.environ.get(_paths.ENV_VAR, "").strip():
+        from tokenpak.cli.commands.home_migrate import shadowed_settings
+
+        shadowed = shadowed_settings(_paths.legacy_home(), _paths.canonical_home())
+        if shadowed and (
+            not _paths.is_migrated_home()
+            or "config.yaml" in _paths.legacy_written_since_migration(limit=1000)
+        ):
+            names = ", ".join(shadowed[:5]) + (
+                f" and {len(shadowed) - 5} more" if len(shadowed) > 5 else ""
+            )
+            _record(
+                "home_config",
+                "warn",
+                f"Ignored settings    {len(shadowed)} only in {_paths.legacy_home()}/config.yaml",
+                detail=(
+                    f"Only {_paths.canonical_home()}/config.yaml is read, so these are "
+                    f"not in effect: {names}. Run `tokenpak home migrate` to see the "
+                    "plan, then `tokenpak home migrate --apply` to add them."
+                ),
+            )
+
     # === Check 0b: custom-provider registration truth ===========================
     custom_configured, custom_registered, custom_provider_error = _custom_provider_counts()
     custom_provider_summary: dict[str, int | str | None] = {

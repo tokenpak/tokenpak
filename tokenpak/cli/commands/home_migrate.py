@@ -55,6 +55,7 @@ _SQLITE_MAGIC = b"SQLite format 3\x00"
 _SQLITE_SUFFIXES = (".db", ".sqlite", ".sqlite3")
 _BATCH = 5000
 _LICENSE = "license.json"
+_CONFIG = "config.yaml"
 _LEGACY_SUFFIX = ".legacy"
 
 
@@ -507,6 +508,10 @@ def _process_file(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
         return Item(rel, SKIP_CANONICAL, "canonical license kept")
     if name.endswith(".jsonl"):
         return _merge_lines(src, dest, rel, ctx)
+    if rel == _CONFIG:
+        merged = _merge_config(src, dest, rel, ctx)
+        if merged is not None:
+            return merged
     side = dest.with_name(dest.name + _LEGACY_SUFFIX)
     detail = f"canonical kept; legacy copy beside it as {side.name}"
     if side.exists() and filecmp.cmp(src, side, shallow=False):
@@ -535,6 +540,110 @@ def _merge_lines(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
                 handle.write(b"\n")
             handle.write(("\n".join(new) + "\n").encode("utf-8"))
     return Item(rel, MERGE, f"{len(new)} new {_plural(len(new), 'line')}", len(new))
+
+
+# --------------------------------------------------------------------------
+# config.yaml: settings merge
+# --------------------------------------------------------------------------
+
+
+def _load_mapping(path: Path) -> Optional[dict[str, Any]]:
+    """Parse a YAML mapping, or ``None`` when it is unreadable or not a mapping."""
+    try:
+        import yaml
+    except ImportError:
+        return None
+    try:
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, ValueError, yaml.YAMLError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
+def _compare_settings(
+    canonical: dict[str, Any], legacy: dict[str, Any], prefix: str = ""
+) -> tuple[list[str], list[str]]:
+    """Dotted names of settings only in *legacy*, and of those set differently."""
+    missing: list[str] = []
+    differ: list[str] = []
+    for key, value in legacy.items():
+        name = f"{prefix}{key}"
+        if key not in canonical:
+            missing.append(name)
+        elif isinstance(canonical[key], dict) and isinstance(value, dict):
+            more, other = _compare_settings(canonical[key], value, name + ".")
+            missing += more
+            differ += other
+        elif canonical[key] != value:
+            differ.append(name)
+    return missing, differ
+
+
+def _add_missing(canonical: dict[str, Any], legacy: dict[str, Any]) -> None:
+    for key, value in legacy.items():
+        if key not in canonical:
+            canonical[key] = value
+        elif isinstance(canonical[key], dict) and isinstance(value, dict):
+            _add_missing(canonical[key], value)
+
+
+def shadowed_settings(legacy: Path, canonical: Path) -> list[str]:
+    """Settings in the legacy ``config.yaml`` that the canonical one lacks.
+
+    Only the canonical file is read once both exist, so these are ignored.
+    Empty when either file is missing or does not parse.
+    """
+    old = _load_mapping(legacy / _CONFIG) if (legacy / _CONFIG).is_file() else None
+    new = _load_mapping(canonical / _CONFIG) if (canonical / _CONFIG).is_file() else None
+    if old is None or new is None:
+        return []
+    return _compare_settings(new, old)[0]
+
+
+def _preview(names: list[str], limit: int = 3) -> str:
+    shown = ", ".join(names[:limit])
+    return shown + (f" and {len(names) - limit} more" if len(names) > limit else "")
+
+
+def _merge_config(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Optional[Item]:
+    """Add settings only the legacy ``config.yaml`` has; canonical values always win.
+
+    Returns ``None`` when either file does not parse, or when nothing is missing
+    but values differ, so the caller keeps the legacy copy beside the canonical one.
+    """
+    old = _load_mapping(src)
+    new = _load_mapping(dest)
+    if old is None or new is None:
+        return None
+    missing, differ = _compare_settings(new, old)
+    if not missing:
+        return None if differ else Item(rel, SKIP_IDENTICAL, "same settings")
+    detail = f"{len(missing)} {_plural(len(missing), 'setting')} added: {_preview(missing)}"
+    if differ:
+        side = dest.with_name(dest.name + _LEGACY_SUFFIX)
+        detail += f"; canonical kept for {_preview(differ)}, legacy copy beside it as {side.name}"
+        if ctx.apply and not (side.exists() and filecmp.cmp(src, side, shallow=False)):
+            _backup(side, ctx)
+            _copy_file(src, side, ctx)
+    if ctx.apply:
+        import yaml
+
+        _backup(dest, ctx)
+        top = [k for k in old if k not in new]
+        if len(top) == len(missing):
+            # Whole sections only: append them so the file's comments are kept.
+            text = dest.read_text(encoding="utf-8")
+            if text and not text.endswith("\n"):
+                text += "\n"
+            text += yaml.safe_dump({k: old[k] for k in top}, sort_keys=False)
+        else:
+            _add_missing(new, old)
+            text = yaml.safe_dump(new, sort_keys=False)
+        tmp = dest.with_name(f".{dest.name}.migrate-tmp")
+        tmp.write_text(text, encoding="utf-8")
+        os.chmod(tmp, _private_mode(dest))
+        os.replace(tmp, dest)
+    return Item(rel, MERGE, detail, len(missing))
 
 
 def _process_link(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
