@@ -9,6 +9,7 @@ import json
 import os
 import sqlite3
 import stat
+import time
 from pathlib import Path
 
 import pytest
@@ -140,7 +141,7 @@ def test_schema_mismatch_is_conflict_and_not_copied(homes, capsys):
         [("INSERT INTO t VALUES ('x')", ())],
     )
     make_db(canonical / "monitor.db", "CREATE TABLE t (a TEXT PRIMARY KEY, b TEXT);")
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE
     assert count(canonical / "monitor.db", "t") == 0
     assert "CONFLICT" in capsys.readouterr().out
 
@@ -152,7 +153,7 @@ def test_json_conflict_keeps_canonical_and_writes_legacy_copy(homes):
     canonical.mkdir()
     (canonical / "fleet.yaml").write_text("who: canonical\n")
     (canonical / "pinned_blocks.json").write_text('{\n "a": 1\n}')  # same content, other format
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE  # fleet.yaml is left for the user to review
     assert (canonical / "fleet.yaml").read_text() == "who: canonical\n"
     assert (canonical / "fleet.yaml.legacy").read_text() == "who: legacy\n"
     assert not (canonical / "pinned_blocks.json.legacy").exists()
@@ -370,7 +371,7 @@ def test_symlink_conflict_with_different_entry(homes, tmp_path, capsys):
     items = _items(capsys)
     assert items["monitor.db"]["action"] == "CONFLICT"
     assert items["telemetry.db"]["action"] == "CONFLICT"
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE
     assert os.readlink(canonical / "monitor.db") == str(tmp_path / "b.db")
     assert (canonical / "telemetry.db").read_bytes() == b"plain file"
 
@@ -434,7 +435,7 @@ def test_virtual_table_db_diverged_keeps_canonical_and_writes_legacy(homes, caps
     items = _items(capsys)
     assert items["companion/recall.db"]["action"] == "CONFLICT"
     assert not (canonical / "companion" / "recall.db.legacy").exists()  # dry run
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE
     assert tree_hash(legacy) == before
     assert count(canonical / "companion" / "recall.db", "docs") == 2
     side = canonical / "companion" / "recall.db.legacy"
@@ -442,7 +443,7 @@ def test_virtual_table_db_diverged_keeps_canonical_and_writes_legacy(homes, caps
     assert sorted(r[0] for r in conn.execute("SELECT body FROM docs")) == ["alpha", "beta"]
     conn.close()
     capsys.readouterr()
-    assert run(apply=True) == 0  # rerun does not rewrite the same legacy copy
+    assert run(apply=True) == EXIT_FAILURE  # still unresolved; legacy copy not rewritten
 
 
 def _boundary(capsys):
@@ -461,9 +462,10 @@ def _boundary(capsys):
 
 
 def _split_fixture(legacy, canonical):
+    """Both homes hold state and nothing conflicts, so an apply finishes cleanly."""
     (legacy / "config.yaml").write_text("a: 1\n")
     canonical.mkdir()
-    (canonical / "config.yaml").write_text("a: 2\n")
+    (canonical / "config.yaml").write_text("a: 1\n")
 
 
 def test_receipt_written_only_on_successful_apply(homes, monkeypatch):
@@ -480,6 +482,7 @@ def test_receipt_written_only_on_successful_apply(homes, monkeypatch):
     assert run(apply=True) == 0
     receipt = _paths.read_migration_receipt()
     assert receipt and receipt["source"] == str(legacy) and receipt["summary"]
+    assert receipt["status"] == "complete" and receipt["unresolved"] == []
     assert stat.S_IMODE(_paths.migration_receipt_path().stat().st_mode) == 0o600
     assert _paths.is_migrated_home() and _paths.is_split_home()
 
@@ -519,7 +522,7 @@ def test_config_merge_adds_legacy_only_sections_and_keeps_comments(homes, capsys
     item = _items(capsys)["config.yaml"]
     assert item["action"] == "MERGE" and "2 settings added: spend_guard, proxy" in item["detail"]
     assert "canonical kept for port" in item["detail"]
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE  # the differing port is still for the user to settle
     text = (canonical / "config.yaml").read_text()
     assert text.startswith("# mine\nport: 2\n")
     data = yaml.safe_load(text)
@@ -542,7 +545,7 @@ def test_config_merge_nested_keeps_canonical_values(homes, capsys):
         "pro:\n  multipak:\n    enabled: false\n  daemon:\n    port: 9\n",
         "pro:\n  multipak:\n    enabled: true\n",
     )
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE
     data = yaml.safe_load((canonical / "config.yaml").read_text())
     assert data == {"pro": {"multipak": {"enabled": True}, "daemon": {"port": 9}}}
     capsys.readouterr()
@@ -561,7 +564,7 @@ def test_config_merge_rerun_is_identical_when_values_agree(homes, capsys):
 def test_config_unparseable_falls_back_to_legacy_copy(homes):
     legacy, canonical = homes
     _config_fixture(legacy, canonical, "a: [1\n", "a: 2\n")
-    assert run(apply=True) == 0
+    assert run(apply=True) == EXIT_FAILURE
     assert (canonical / "config.yaml").read_text() == "a: 2\n"
     assert (canonical / "config.yaml.legacy").read_text() == "a: [1\n"
 
@@ -593,3 +596,471 @@ def test_doctor_quiet_after_migration_when_setting_removed_on_purpose(homes, cap
     (canonical / "config.yaml").write_text("a: 1\n")
     capsys.readouterr()
     assert _doctor_row(capsys, "home_config") is None
+
+
+# --------------------------------------------------------------------------
+# Outcome: an apply with unresolved items is not a finished migration
+# --------------------------------------------------------------------------
+
+LEDGER = "CREATE TABLE ledger (k TEXT PRIMARY KEY, v INTEGER);"
+LEDGER_WIDE = "CREATE TABLE ledger (k TEXT PRIMARY KEY, v INTEGER, note TEXT);"
+LEDGER_ROW = "INSERT INTO ledger (k, v) VALUES (?, ?)"
+
+
+def ledger_keys(path: Path) -> list[str]:
+    conn = sqlite3.connect(path)
+    try:
+        return sorted(r[0] for r in conn.execute("SELECT k FROM ledger"))
+    finally:
+        conn.close()
+
+
+def _schema_conflict(legacy, canonical):
+    """Same database name in both homes with different schemas: nothing can be merged."""
+    (legacy / "config.yaml").write_text("a: 1\n")
+    canonical.mkdir()
+    (canonical / "config.yaml").write_text("a: 1\n")
+    make_db(
+        legacy / "execution_ledger.db", LEDGER, [(LEDGER_ROW, ("a", 1)), (LEDGER_ROW, ("b", 2))]
+    )
+    make_db(canonical / "execution_ledger.db", LEDGER_WIDE, [(LEDGER_ROW, ("c", 3))])
+
+
+def _file_conflict(legacy, canonical):
+    (legacy / "fleet.yaml").write_text("who: legacy\n")
+    (canonical / "fleet.yaml").write_text("who: canonical\n")
+
+
+def _boundary_row(capsys):
+    capsys.readouterr()
+    return _doctor_row(capsys, "home_boundary")
+
+
+def test_schema_conflict_apply_is_not_done_and_keeps_the_only_copy(homes, capsys):
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+    before = tree_hash(legacy)
+    assert run(apply=True) == EXIT_FAILURE
+    captured = capsys.readouterr()
+    text = captured.out + captured.err
+    assert tree_hash(legacy) == before
+    assert ledger_keys(legacy / "execution_ledger.db") == ["a", "b"]  # the only copy of a and b
+    assert ledger_keys(canonical / "execution_ledger.db") == ["c"]  # nothing merged in
+    assert not (canonical / "execution_ledger.db.legacy").exists()
+    assert "✅" not in text and "Done." not in text
+    assert "you can remove the legacy home" not in text
+    assert "not finished: 1 item still needs review" in captured.err
+    assert "Keep it" in captured.err and "tokenpak home migrate --apply" in captured.err
+    assert "Nothing was copied for these" in captured.err
+    assert "schema differs in table ledger" in captured.err
+    assert "saved beside it" not in text and "legacy copy beside it" not in text
+
+
+def test_conflict_guidance_separates_nothing_copied_from_saved_beside(homes, capsys):
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+    _file_conflict(legacy, canonical)
+    assert run(apply=True) == EXIT_FAILURE
+    err = capsys.readouterr().err
+    assert "2 items still need review" in err
+    assert "Nothing was copied for these" in err
+    assert "the legacy one is saved beside it" in err
+    assert "fleet.yaml  as fleet.yaml.legacy" in err
+    assert "execution_ledger.db  as" not in err
+    assert (canonical / "fleet.yaml.legacy").read_text() == "who: legacy\n"
+    assert not (canonical / "execution_ledger.db.legacy").exists()
+
+
+def test_json_apply_reports_the_incomplete_outcome(homes, capsys):
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+    _file_conflict(legacy, canonical)
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    report = json.loads(capsys.readouterr().out)
+    assert {"applied", "legacy", "canonical", "items", "summary", "busy"} <= set(report)
+    assert report["applied"] is True and report["outcome"] == "incomplete"
+    assert report["receipt"] == "written" and report["summary"]["CONFLICT"] == 2
+    assert set(report["items"][0]) == {"path", "action", "detail", "rows"}
+    by_path = {u["path"]: u for u in report["unresolved"]}
+    assert set(by_path) == {"execution_ledger.db", "fleet.yaml"}
+    assert by_path["execution_ledger.db"]["legacy_copy"] is None
+    assert "nothing copied" in by_path["execution_ledger.db"]["detail"]
+    assert by_path["fleet.yaml"]["legacy_copy"] == "fleet.yaml.legacy"
+
+
+def test_clean_apply_is_complete_and_repeatable(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    (legacy / "requests.jsonl").write_text('{"i":1}\n')
+    assert run(apply=True) == 0
+    captured = capsys.readouterr()
+    assert "✅ Done." in captured.out and captured.err == ""
+    for _ in range(2):
+        assert run(apply=True, as_json=True) == 0
+        report = json.loads(capsys.readouterr().out)
+        assert report["applied"] is True and report["outcome"] == "complete"
+        assert report["unresolved"] == [] and report["receipt"] == "written"
+    receipt = _paths.read_migration_receipt()
+    assert receipt["status"] == "complete" and receipt["unresolved"] == []
+    assert _paths.is_migrated_home() and not _paths.is_migration_incomplete()
+
+
+def test_dry_run_explains_conflicts_without_writing(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+    _file_conflict(legacy, canonical)
+    before = (tree_hash(legacy), tree_hash(canonical))
+    assert run() == 0
+    out = capsys.readouterr().out
+    assert (tree_hash(legacy), tree_hash(canonical)) == before
+    assert not _paths.migration_receipt_path().exists()
+    assert "Needs review (2)" in out
+    assert "Nothing would be copied for these" in out
+    assert "--apply saves the legacy one beside it" in out
+    assert "fleet.yaml  as fleet.yaml.legacy" in out
+    assert "execution_ledger.db  as" not in out
+    assert "records the migration as incomplete" in out
+    assert "✅" not in out and "Done." not in out
+    assert run(as_json=True) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["applied"] is False and report["outcome"] == "planned"
+    assert report["receipt"] is None and len(report["unresolved"]) == 2
+
+
+def test_config_merge_that_kept_differing_values_is_unresolved(homes, capsys):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, "port: 1\nspend_guard:\n  enabled: true\n", "port: 2\n")
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    report = json.loads(capsys.readouterr().out)
+    assert report["summary"] == {"MERGE": 1}  # no CONFLICT in the counts, still unresolved
+    assert report["outcome"] == "incomplete"
+    assert [u["path"] for u in report["unresolved"]] == ["config.yaml"]
+    assert report["unresolved"][0]["legacy_copy"] == "config.yaml.legacy"
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn" and "migration incomplete: 1 unresolved" in row["message"]
+
+
+def test_incomplete_apply_records_receipt_and_doctor_warns(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+    assert run(apply=True) == EXIT_FAILURE
+    receipt = _paths.read_migration_receipt()
+    assert receipt["status"] == "incomplete" and receipt["summary"]["CONFLICT"] == 1
+    assert [u["path"] for u in receipt["unresolved"]] == ["execution_ledger.db"]
+    assert receipt["unresolved"][0]["legacy_copy"] is None
+    assert stat.S_IMODE(_paths.migration_receipt_path().stat().st_mode) == 0o600
+    assert _paths.is_split_home() and _paths.is_migration_incomplete()
+    assert not _paths.is_migrated_home()
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn" and "migration incomplete" in row["message"]
+    assert "execution_ledger.db" in row["detail"] and "Keep it" in row["detail"]
+    assert "migrated on" not in row["message"]
+
+
+def _old_receipt(legacy, canonical, summary):
+    """A receipt as earlier releases wrote it: no status and no unresolved list."""
+    body = {
+        "migrated_at_utc": "2026-10-01T00:00:00Z",
+        "epoch": time.time() + 3600,
+        "source": str(legacy),
+        "target": str(canonical),
+        "summary": summary,
+        "tokenpak_version": "1.31.0",
+    }
+    (canonical / "home-migrated.json").write_text(json.dumps(body))
+
+
+def test_doctor_warns_for_old_receipt_whose_summary_has_conflicts(homes, capsys):
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    _old_receipt(legacy, canonical, {"COPY": 1, "CONFLICT": 2})
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn"
+    assert "migration incomplete: 2 unresolved" in row["message"]
+
+
+def test_doctor_still_passes_for_old_receipt_without_conflicts(homes, capsys):
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    _old_receipt(legacy, canonical, {"COPY": 1, "SKIP-identical": 3})
+    row = _boundary_row(capsys)
+    assert row["status"] == "pass" and "migrated on 2026-10-01T00:00:00Z" in row["message"]
+
+
+def test_stale_success_receipt_cannot_hide_a_later_incomplete_apply(homes, capsys):
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    assert run(apply=True) == 0
+    assert _boundary_row(capsys)["status"] == "pass"
+    # Later a legacy database appears whose schema cannot be merged.
+    make_db(legacy / "execution_ledger.db", LEDGER, [(LEDGER_ROW, ("a", 1))])
+    make_db(canonical / "execution_ledger.db", LEDGER_WIDE, [(LEDGER_ROW, ("c", 3))])
+    assert run(apply=True) == EXIT_FAILURE
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn" and "migration incomplete" in row["message"]
+
+
+def test_apply_that_stops_midway_leaves_no_success_receipt(homes, monkeypatch, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    assert run(apply=True) == 0
+    assert _paths.migration_receipt_path().exists()
+
+    def boom(*args, **kwargs):
+        raise OSError("disk went away")
+
+    monkeypatch.setattr(home_migrate, "build", boom)
+    assert run(apply=True) == EXIT_FAILURE
+    assert not _paths.migration_receipt_path().exists()
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn" and "split home" in row["message"]
+
+
+def test_busy_refusal_leaves_an_earlier_receipt_alone(homes, monkeypatch):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    assert run(apply=True) == 0
+    before = _paths.migration_receipt_path().read_bytes()
+    monkeypatch.setattr(home_migrate, "busy_reasons", lambda *a, **k: ["busy"])
+    assert run(apply=True) == EXIT_BUSY
+    assert _paths.migration_receipt_path().read_bytes() == before
+
+
+def test_apply_refuses_when_the_earlier_receipt_cannot_be_cleared(homes, capsys):
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    (legacy / "fleet.yaml").write_text("who: legacy\n")
+    (canonical / "home-migrated.json").mkdir()  # cannot be unlinked as a file
+    assert run(apply=True) == EXIT_FAILURE
+    err = capsys.readouterr().err
+    assert "could not clear the earlier migration receipt" in err
+    assert "Nothing was changed" in err
+    assert not (canonical / "fleet.yaml").exists()
+
+
+def test_receipt_write_failure_is_reported_not_claimed_as_done(homes, monkeypatch, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _split_fixture(legacy, canonical)
+    assert run(apply=True) == 0  # an earlier success receipt exists
+    (legacy / "requests.jsonl").write_text('{"i":1}\n')
+
+    def full(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(home_migrate, "_write_receipt", full)
+    capsys.readouterr()
+    assert run(apply=True) == EXIT_FAILURE
+    captured = capsys.readouterr()
+    assert "receipt could not be written (disk full)" in captured.err
+    assert "✅" not in captured.out + captured.err and "Done." not in captured.out
+    assert (canonical / "requests.jsonl").read_text() == '{"i":1}\n'  # the merge itself ran
+    assert _paths.read_migration_receipt() is None  # and the earlier receipt does not stand in
+    assert "split home" in _boundary_row(capsys)["message"]
+
+    (legacy / "requests.jsonl").write_text('{"i":1}\n{"i":2}\n')
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["outcome"] == "unrecorded" and report["receipt"] == "failed"
+    assert report["unresolved"] == [] and "disk full" in captured.err
+
+
+def test_conflict_with_failed_receipt_write_still_says_not_finished(homes, monkeypatch, capsys):
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+
+    def full(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(home_migrate, "_write_receipt", full)
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    captured = capsys.readouterr()
+    report = json.loads(captured.out)
+    assert report["outcome"] == "incomplete" and report["receipt"] == "failed"
+    assert run(apply=True) == EXIT_FAILURE
+    err = capsys.readouterr().err
+    assert "not finished" in err and "disk full" in err
+
+
+def test_retry_after_resolving_the_conflict_finishes_and_stays_finished(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _schema_conflict(legacy, canonical)
+    assert run(apply=True) == EXIT_FAILURE
+    assert _boundary_row(capsys)["status"] == "warn"
+    # The user rebuilds the canonical table with the legacy schema, keeping its rows.
+    conn = sqlite3.connect(canonical / "execution_ledger.db")
+    conn.executescript(
+        "CREATE TABLE ledger_new (k TEXT PRIMARY KEY, v INTEGER);"
+        "INSERT INTO ledger_new (k, v) SELECT k, v FROM ledger;"
+        "DROP TABLE ledger;"
+        "ALTER TABLE ledger_new RENAME TO ledger;"
+    )
+    conn.close()
+    assert run(apply=True) == 0
+    assert ledger_keys(canonical / "execution_ledger.db") == ["a", "b", "c"]
+    assert ledger_keys(legacy / "execution_ledger.db") == ["a", "b"]
+    assert _paths.read_migration_receipt()["status"] == "complete"
+    row = _boundary_row(capsys)
+    assert row["status"] == "pass" and "migrated on" in row["message"]
+    assert run(apply=True, as_json=True) == 0
+    report = json.loads(capsys.readouterr().out)
+    assert report["outcome"] == "complete"
+    assert {i["action"] for i in report["items"]} == {"SKIP-identical"}
+
+
+def test_receipt_completeness_rules():
+    from tokenpak import _paths
+
+    complete = _paths.migration_receipt_complete
+    assert not complete(None)
+    assert complete({"summary": {"COPY": 2}})  # written before status existed
+    assert not complete({"summary": {"CONFLICT": 1}})
+    assert not complete({"unresolved": [{"path": "x"}]})
+    assert complete({"status": "complete", "unresolved": [], "summary": {}})
+    assert not complete({"status": "incomplete", "summary": {}})
+    assert not complete({"status": "something-else", "summary": {}})
+    assert not complete({"status": "complete", "summary": {"CONFLICT": 1}})
+    assert _paths.migration_unresolved({"unresolved": [{}, {}], "summary": {"CONFLICT": 1}}) == 2
+    assert _paths.migration_unresolved(None) == 0
+    assert _paths._RECEIPT_CONFLICT == home_migrate.CONFLICT
+
+
+# --------------------------------------------------------------------------
+# Migration-only state: cost.db is carried by migrate but is not a resolver
+# state file, so these homes are not a "split home" and have no config.yaml.
+# --------------------------------------------------------------------------
+
+
+def _cost_conflict(legacy, canonical):
+    make_db(
+        legacy / "cost.db",
+        "CREATE TABLE t (a TEXT PRIMARY KEY);",
+        [("INSERT INTO t VALUES ('legacy-only')", ())],
+    )
+    make_db(canonical / "cost.db", "CREATE TABLE t (a TEXT PRIMARY KEY, b TEXT);")
+
+
+def _assert_keeps_legacy(row):
+    detail = row["detail"].lower()
+    assert row["status"] == "warn"
+    assert "keep" in detail and "tokenpak home migrate" in detail
+    assert "remove" not in detail  # no deletion advice for an unfinished migration
+
+
+def test_cost_db_only_conflict_is_incomplete_and_doctor_keeps_legacy(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _cost_conflict(legacy, canonical)
+    assert not _paths.is_split_home()  # nothing here decides which home reads resolve to
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    report = json.loads(capsys.readouterr().out)
+    assert report["outcome"] == "incomplete" and report["receipt"] == "written"
+    assert count(canonical / "cost.db", "t") == 0  # nothing was merged
+    assert count(legacy / "cost.db", "t") == 1  # the only copy of that row
+    assert not (canonical / "cost.db.legacy").exists()
+    assert _paths.read_migration_receipt()["status"] == "incomplete"
+    assert _paths.is_migration_incomplete() and not _paths.is_split_home()
+    row = _boundary_row(capsys)
+    assert "migration incomplete" in row["message"] and "cost.db" in row["detail"]
+    _assert_keeps_legacy(row)
+
+
+def test_old_incomplete_receipt_is_honoured_without_resolver_state(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _cost_conflict(legacy, canonical)
+    _old_receipt(legacy, canonical, {"COPY": 1, "CONFLICT": 1})
+    assert not _paths.is_split_home() and _paths.is_migration_incomplete()
+    row = _boundary_row(capsys)
+    assert "migration incomplete: 1 unresolved" in row["message"]
+    _assert_keeps_legacy(row)
+
+
+def test_old_incomplete_receipt_with_state_only_in_one_home(homes, capsys):
+    legacy, canonical = homes
+    make_db(legacy / "cost.db", "CREATE TABLE t (a TEXT PRIMARY KEY);")
+    canonical.mkdir()
+    (canonical / "config.yaml").write_text("a: 1\n")  # canonical alone holds resolver state
+    _old_receipt(legacy, canonical, {"CONFLICT": 1})
+    row = _boundary_row(capsys)
+    assert "migration incomplete" in row["message"]
+    _assert_keeps_legacy(row)
+
+
+def test_cost_db_conflict_with_failed_receipt_write_still_keeps_legacy(homes, monkeypatch, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _cost_conflict(legacy, canonical)
+    _old_receipt(legacy, canonical, {"COPY": 1})  # an earlier success the new run must not leave
+
+    def full(*args, **kwargs):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(home_migrate, "_write_receipt", full)
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    report = json.loads(capsys.readouterr().out)
+    assert report["outcome"] == "incomplete" and report["receipt"] == "failed"
+    assert not _paths.migration_receipt_path().exists()  # no receipt of any kind remains
+    assert count(legacy / "cost.db", "t") == 1 and count(canonical / "cost.db", "t") == 0
+    assert not _paths.is_migration_incomplete()  # nothing recorded, so doctor cannot rely on it
+    _assert_keeps_legacy(_boundary_row(capsys))
+
+
+def test_both_homes_present_fallback_keeps_legacy(homes, capsys):
+    legacy, canonical = homes
+    _cost_conflict(legacy, canonical)  # never migrated, no receipt
+    _assert_keeps_legacy(_boundary_row(capsys))
+
+
+def test_incomplete_receipt_is_ignored_for_explicit_home_or_missing_legacy(homes, monkeypatch):
+    import shutil
+
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    _cost_conflict(legacy, canonical)
+    assert run(apply=True) == EXIT_FAILURE
+    assert _paths.is_migration_incomplete()
+    monkeypatch.setenv("TOKENPAK_HOME", str(canonical.parent / "scoped"))
+    assert not _paths.is_migration_incomplete()  # a scoped home is a closed world
+    monkeypatch.delenv("TOKENPAK_HOME")
+    assert _paths.is_migration_incomplete()
+    shutil.rmtree(legacy)  # the user's own decision; nothing is left to protect
+    assert not _paths.is_migration_incomplete()
+
+
+def test_incomplete_receipt_outranks_legacy_active_guidance(homes, capsys):
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    # An unreadable legacy database and no canonical state: reads resolve to the legacy home.
+    (legacy / "monitor.db").write_bytes(b"SQLite format 3\x00" + b"not a valid SQLite database")
+    before = tree_hash(legacy)
+    assert run(apply=True, as_json=True) == EXIT_FAILURE
+    report = json.loads(capsys.readouterr().out)
+    assert report["outcome"] == "incomplete" and report["receipt"] == "written"
+    assert [u["path"] for u in report["unresolved"]] == ["monitor.db"]
+    assert "unreadable" in report["unresolved"][0]["detail"]
+    assert tree_hash(legacy) == before  # the only copy is untouched
+    assert _paths.is_legacy_active() and _paths.is_migration_incomplete()
+    row = _boundary_row(capsys)
+    assert "migration incomplete" in row["message"] and "monitor.db" in row["detail"]
+    assert "absent" not in row["detail"]  # not the "canonical home is absent" advisory
+    _assert_keeps_legacy(row)

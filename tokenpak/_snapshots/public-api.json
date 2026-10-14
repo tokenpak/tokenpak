@@ -1029,6 +1029,22 @@
     },
     {
       "module": "tokenpak.cli.commands.home_migrate",
+      "name": "OUTCOME_COMPLETE"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "OUTCOME_INCOMPLETE"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "OUTCOME_PLANNED"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
+      "name": "OUTCOME_UNRECORDED"
+    },
+    {
+      "module": "tokenpak.cli.commands.home_migrate",
       "name": "SKIP_IDENTICAL"
     },
     {

@@ -801,8 +801,30 @@ def run_doctor(
     # === Check 0: home-directory boundary ==========================================
     # Reports the resolved TokenPak home + flags legacy paths that should
     # be migrated. Cheap, side-effect-free, runs before everything else
-    # so the operator sees the boundary state up front.
-    if _paths.is_legacy_active():
+    # so the operator sees the boundary state up front. A recorded incomplete
+    # migration comes first: it is a fact about unresolved data, whichever home
+    # reads currently resolve to.
+    if _paths.is_migration_incomplete():
+        receipt = _paths.read_migration_receipt() or {}
+        when = str(receipt.get("migrated_at_utc", "an earlier run"))
+        left = _paths.migration_unresolved(receipt)
+        listed = receipt.get("unresolved")
+        entries = listed if isinstance(listed, list) else []
+        names = [str(e["path"]) for e in entries if isinstance(e, dict) and e.get("path")]
+        example = f" (for example {', '.join(names[:3])})" if names else ""
+        count = f"{left} unresolved" if left else "items unresolved"
+        _record(
+            "home_boundary",
+            "warn",
+            f"~/.tpk/ boundary    migration incomplete: {count}",
+            detail=(
+                f"The migration on {when} left items unresolved{example}, so "
+                f"{_paths.legacy_home()} may still hold the only copy of some data. Keep it. "
+                "Run `tokenpak home migrate` to see what needs review, resolve each item, then "
+                "run `tokenpak home migrate --apply` again."
+            ),
+        )
+    elif _paths.is_legacy_active():
         _record(
             "home_boundary",
             "warn",
@@ -859,8 +881,9 @@ def run_doctor(
             detail=(
                 f"Both {_paths.canonical_home()} and "
                 f"{_paths.legacy_home()} exist. Canonical wins. "
-                f"Once you've confirmed ~/.tpk/ is working, you can "
-                f"remove the legacy directory manually."
+                "Run `tokenpak home migrate` to see whether the legacy directory "
+                "holds anything ~/.tpk/ lacks, and keep it until a migration has "
+                "finished with nothing unresolved."
             ),
         )
     else:
