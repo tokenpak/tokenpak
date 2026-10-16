@@ -144,7 +144,7 @@ class ShadowHook:
             txn = self._ledger.get_transaction(transaction_id)
             if txn:
                 # Update Elo rating
-                from .elo import update_elo
+                from tokenpak.telemetry.elo import update_elo
 
                 update_elo(txn["model_used"], txn["task_type"], accepted)
             return self._ledger.record_outcome(transaction_id, accepted, reason)

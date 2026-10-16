@@ -1,5 +1,5 @@
 {
-  "_comment": "Model cost tiers: 1=cheapest, 2=mid, 3=premium, 4=frontier",
+  "_comment": "STALE model tier data; retained for compatibility and pending refresh. Model cost tiers: 1=cheapest, 2=mid, 3=premium, 4=frontier",
   "gpt-4o-mini": 1,
   "claude-haiku": 1,
   "claude-3-haiku-20240307": 1,
