@@ -1164,9 +1164,16 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # HTTP verbs
     # ------------------------------------------------------------------
 
+    def _read_work_tag(self) -> None:
+        from tokenpak.core.work_tag import extract_job_path, work_tag_from_headers
+
+        self.path, path_tag = extract_job_path(self.path)
+        self._tokenpak_work_tag = path_tag or work_tag_from_headers(self.headers)
+
     def do_GET(self) -> None:
         if not self._enforce_proxy_auth():
             return
+        self._read_work_tag()
         ps = self._ps
         path = self.path
 
@@ -1432,6 +1439,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._enforce_proxy_auth():
             return
+        self._read_work_tag()
         ps = self._ps
 
         # App-level /tpk/v1/* POST endpoints — reserved for future compress,
@@ -3197,6 +3205,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             user_id=getattr(self, "_tokenpak_user_id", "") or "",
                             session_id=_mon_session_id,
                             agent_id=_mon_agent_id,
+                            work_tag=getattr(self, "_tokenpak_work_tag", ""),
                             cycle_id=_mon_cycle_id,
                             attribution_source=_mon_attribution_source,
                             stop_reason=stop_reason,

@@ -255,6 +255,10 @@ def main(args: list[str] | None = None) -> int:
             pass
     if proxy_url:
         env["ANTHROPIC_BASE_URL"] = proxy_url
+        from tokenpak.core.work_tag import tagged_proxy_url, validate_work_tag
+
+        work_tag = validate_work_tag(env.get("TOKENPAK_JOB_TAG"))
+        env["ANTHROPIC_BASE_URL"] = tagged_proxy_url(proxy_url, work_tag)
 
     # Print styled startup banner
     from tokenpak.cli.commands.status import MEME_LINES, _get_version

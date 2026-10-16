@@ -239,6 +239,10 @@ def _with_tokenpak_proxy_route(
     if not _local_proxy_is_healthy():
         _audit_guard_bypassed_proxy_unhealthy(session_id)
         return list(args), False
+    from tokenpak.core.work_tag import tagged_proxy_url, validate_work_tag
+
+    work_tag = validate_work_tag(os.environ.get("TOKENPAK_JOB_TAG"))
+    base_url = tagged_proxy_url(_TOKENPAK_OPENAI_BASE_URL, work_tag)
     provider = _TOKENPAK_MODEL_PROVIDER
     return [
         "-c",
@@ -246,7 +250,7 @@ def _with_tokenpak_proxy_route(
         "-c",
         f'model_providers.{provider}.name="TokenPak local proxy"',
         "-c",
-        f'model_providers.{provider}.base_url="{_TOKENPAK_OPENAI_BASE_URL}"',
+        f'model_providers.{provider}.base_url="{base_url}"',
         "-c",
         f'model_providers.{provider}.wire_api="responses"',
         "-c",
