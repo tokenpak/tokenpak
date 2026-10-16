@@ -22,6 +22,8 @@ See tokenpak/proxy/route_policy.py for the per-route behavior matrix.
 
 from __future__ import annotations
 
+from tokenpak.core.reasoning import REASONING_EFFORTS
+
 __all__ = (
     "CLAUDE_CODE_HEADER_ALLOWLIST",
     "CacheMetrics",
@@ -4421,10 +4423,8 @@ def _extract_response_tokens(body: bytes) -> int:
 def _extract_request_reasoning_effort(body: bytes | None) -> tuple[str, str]:
     """Return normalized and raw request-observed reasoning effort.
 
-    The governed reasoning-usage schema currently admits only
-    low/medium/high. Newer client values remain available in the raw field so
-    the schema can be reconciled explicitly instead of silently discarding or
-    widening the normalized contract.
+    Known client labels retain their exact meaning. Future labels remain in
+    the raw field with explicit unrecognized provenance.
 
     A missing or empty request body (for example a zero-length-body POST to
     a model endpoint) carries no reasoning-effort signal and is treated the
@@ -4448,7 +4448,7 @@ def _extract_request_reasoning_effort(body: bytes | None) -> tuple[str, str]:
                 continue
             raw = value.strip()
             if raw:
-                return (raw if raw in {"low", "medium", "high"} else "", raw)
+                return (raw if raw in REASONING_EFFORTS else "", raw)
         return "", ""
     except (json.JSONDecodeError, UnicodeDecodeError):
         return "", ""
@@ -4497,7 +4497,7 @@ def _provider_usage_observation(
     raw_provider_effort = record.get("reasoning_effort")
     provider_effort = (
         raw_provider_effort
-        if isinstance(raw_provider_effort, str) and raw_provider_effort in {"low", "medium", "high"}
+        if isinstance(raw_provider_effort, str) and raw_provider_effort in REASONING_EFFORTS
         else None
     )
     provider_effort_raw = usage.get("reasoning_effort") if usage is not None else None

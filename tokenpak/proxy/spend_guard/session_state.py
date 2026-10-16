@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import Optional
 
 from tokenpak import _paths
+from tokenpak.core.reasoning import REASONING_EFFORTS
 
 _log = logging.getLogger(__name__)
 
@@ -118,8 +119,8 @@ def _reasoning_effort_cell(
 ) -> tuple[str, bool]:
     """Return (cell label, unsupported-explicit-signal).
 
-    The normalized ledger contract recognizes low/medium/high. Explicit xhigh
-    is recovered from raw provenance as a separate forecast cell. Empty legacy
+    Known client labels form separate forecast cells. Historical labels
+    are recovered from explicit raw provenance without rewriting rows. Empty legacy
     rows are the honest ``unknown`` cell. A non-empty raw/source observation
     without a recognized normalized value is explicit but unsupported; it
     must not be pooled with requests that carried no effort signal.
@@ -132,11 +133,11 @@ def _reasoning_effort_cell(
     # ledger rows or pooling it with a missing-effort cell.
     if (
         not normalized_text
-        and raw_text == "xhigh"
+        and raw_text in REASONING_EFFORTS
         and source_text in {"request_body_unrecognized", "provider_usage_object_unrecognized"}
     ):
         return raw_text, False
-    if normalized_text in {"low", "medium", "high"}:
+    if normalized_text in REASONING_EFFORTS:
         if (raw_text and raw_text != normalized_text) or source_text.endswith("_unrecognized"):
             return "unknown", True
         return normalized_text, False
