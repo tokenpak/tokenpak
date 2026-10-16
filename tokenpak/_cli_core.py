@@ -5220,7 +5220,12 @@ def cmd_leaderboard(args: CommandArgs) -> None:
 
 
 def cmd_report(args: CommandArgs) -> None:
-    """Generate and display daily savings report."""
+    """Generate daily savings or read-only job/session usage totals."""
+    if getattr(args, "usage", False):
+        from .cli.usage_report import print_usage
+
+        print_usage(args)
+        return
     from .cli.daily_report import generate_report
 
     format_type: Literal["terminal", "markdown", "json"] = "terminal"
@@ -5366,6 +5371,14 @@ def _build_report_parser(sub: Subparsers) -> None:
         "--markdown", action="store_true", help="Output markdown format (for messaging)"
     )
     p_report.add_argument("--json", action="store_true", help="Output JSON format")
+    p_report.add_argument(
+        "--usage", action="store_true", help="Read local job and session usage totals as JSON"
+    )
+    p_report.add_argument("--work-tag", help="Filter usage by opaque work tag (with --usage)")
+    p_report.add_argument("--session-id", help="Filter usage by session identifier (with --usage)")
+    p_report.add_argument(
+        "--db", metavar="path", help="Read a specific usage ledger (with --usage)"
+    )
     p_report.set_defaults(func=cmd_report)
 
 

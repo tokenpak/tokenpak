@@ -1176,6 +1176,14 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         self._read_work_tag()
         ps = self._ps
         path = self.path
+        if path.split("?", 1)[0] == "/stats/usage":
+            from tokenpak._paths import monitor_db
+            from tokenpak.proxy.job_usage import handle_usage
+
+            handle_usage(
+                self, ps.monitor.db_path if ps.monitor is not None else monitor_db(mode="read")
+            )
+            return
 
         # App-level /tpk/v1/* endpoints — proxy-owned resources (vault, budget,
         # journal, …) exposed over REST so the companion + external tools can
@@ -2569,6 +2577,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _event_transform_applied = False
 
             output_tokens = 0
+            from tokenpak.proxy.job_usage import observed_model
+
+            served_model = ""
             provider_usage_object: Mapping[str, object] | None = None
             _guard_response_complete = not is_streaming
 
@@ -2769,6 +2780,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         except Exception:
                             sse_observation_buffer = b""
                     sse_usage = extract_sse_tokens(sse_observation_buffer)
+                    served_model = observed_model(sse_observation_buffer, streaming=True)
                     provider_usage_object = _extract_sse_usage(sse_observation_buffer)
                     _guard_response_complete = (
                         _guard_response_complete
@@ -2938,6 +2950,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         except Exception:
                             pass
                     output_tokens = _extract_response_tokens(body_for_metrics)
+                    served_model = observed_model(body_for_metrics)
                     provider_usage_object = _extract_response_usage(body_for_metrics)
                     # stop_reason from the response JSON copy (read-only -
                     # the client already received the original bytes above).
@@ -3158,6 +3171,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     try:
                         ps.monitor.log(
                             model=model,
+                            served_model=served_model,
                             input_tokens=(
                                 _cost_observed["input_tokens"]
                                 if self._guard_accounting.ref
