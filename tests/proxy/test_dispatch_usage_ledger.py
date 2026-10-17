@@ -346,9 +346,9 @@ def test_openai_responses_stream_usage_and_request_effort_are_truthful():
         ),
         (
             b'{"output_config":{"effort":"max"}}',
-            "",
             "max",
-            "request_body_unrecognized",
+            "max",
+            "request_body",
         ),
     ],
 )
@@ -381,9 +381,9 @@ def test_effort_precedence_is_provider_then_explicit_request_shape():
         },
         b'{"output_config":{"effort":"high"}}',
     )
-    assert provider_wins["reasoning_effort"] == ""
+    assert provider_wins["reasoning_effort"] == "xhigh"
     assert provider_wins["reasoning_effort_raw"] == "xhigh"
-    assert provider_wins["reasoning_effort_source"] == "provider_usage_object_unrecognized"
+    assert provider_wins["reasoning_effort_source"] == "provider_usage_object"
 
     request_conflict = _provider_usage_observation(
         "anthropic",
@@ -442,10 +442,10 @@ def test_new_reasoning_effort_is_preserved_without_widening_normalized_contract(
     observed = _provider_usage_observation(
         "openai-codex",
         {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
-        b'{"reasoning":{"effort":"xhigh"}}',
+        b'{"reasoning":{"effort":"future-effort"}}',
     )
     assert observed["reasoning_effort"] == ""
-    assert observed["reasoning_effort_raw"] == "xhigh"
+    assert observed["reasoning_effort_raw"] == "future-effort"
     assert observed["reasoning_effort_source"] == "request_body_unrecognized"
 
 
