@@ -47,6 +47,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import stat
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Optional
 
@@ -814,14 +815,12 @@ def _is_valid_monitor_db(p: Path) -> bool:
             return False
         if resolved.stat().st_size < 100:
             return False
-        conn = sqlite3.connect(str(resolved), timeout=2)
-        cur = conn.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
-            (_MONITOR_TABLE,),
-        )
-        found = cur.fetchone() is not None
-        conn.close()
-        return found
+        with closing(sqlite3.connect(str(resolved), timeout=2)) as conn:
+            cur = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name=?",
+                (_MONITOR_TABLE,),
+            )
+            return cur.fetchone() is not None
     except Exception:
         return False
 
@@ -902,10 +901,9 @@ def monitor_db_candidates() -> list[dict[str, Any]]:
                 selected_path is not None and candidate.resolve() == selected_path.resolve()
             )
             try:
-                conn = sqlite3.connect(str(candidate.resolve()), timeout=2)
-                cur = conn.execute(f"SELECT COUNT(*) FROM {_MONITOR_TABLE}")
-                entry["rows"] = cur.fetchone()[0]
-                conn.close()
+                with closing(sqlite3.connect(str(candidate.resolve()), timeout=2)) as conn:
+                    cur = conn.execute(f"SELECT COUNT(*) FROM {_MONITOR_TABLE}")
+                    entry["rows"] = cur.fetchone()[0]
             except Exception:
                 pass
         results.append(entry)

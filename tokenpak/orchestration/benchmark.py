@@ -1161,65 +1161,67 @@ def benchmark_indexing_baseline(directory: str, iterations: int = 3) -> dict[str
             import sqlite3
 
             conn = sqlite3.connect(db_path)
-            conn.execute("""
-                CREATE TABLE blocks (
-                    path TEXT PRIMARY KEY,
-                    content_hash TEXT, version INTEGER, file_type TEXT,
-                    raw_tokens INTEGER, compressed_tokens INTEGER,
-                    compressed_content TEXT, quality_score REAL,
-                    importance REAL, processed_at REAL
-                )
-            """)
+            try:
+                conn.execute("""
+                    CREATE TABLE blocks (
+                        path TEXT PRIMARY KEY,
+                        content_hash TEXT, version INTEGER, file_type TEXT,
+                        raw_tokens INTEGER, compressed_tokens INTEGER,
+                        compressed_content TEXT, quality_score REAL,
+                        importance REAL, processed_at REAL
+                    )
+                """)
 
-            files = list(walk_directory(directory))
-            start = time.perf_counter()
-            processed = 0
+                files = list(walk_directory(directory))
+                start = time.perf_counter()
+                processed = 0
 
-            for path, file_type, _ in files:
-                try:
-                    content = Path(path).read_text(encoding="utf-8", errors="ignore")
-                except Exception:
-                    continue
+                for path, file_type, _ in files:
+                    try:
+                        content = Path(path).read_text(encoding="utf-8", errors="ignore")
+                    except Exception:
+                        continue
 
-                if not content.strip():
-                    continue
+                    if not content.strip():
+                        continue
 
-                processor = get_processor(file_type)
-                if not processor:
-                    continue
+                    processor = get_processor(file_type)
+                    if not processor:
+                        continue
 
-                compressed = _process_text(processor, content, path)
-                if compressed is None:
-                    continue
+                    compressed = _process_text(processor, content, path)
+                    if compressed is None:
+                        continue
 
-                # Simulate old: uncached token counting
-                raw_tokens = count_tokens_uncached(content)
-                compressed_tokens = count_tokens_uncached(compressed)
+                    # Simulate old: uncached token counting
+                    raw_tokens = count_tokens_uncached(content)
+                    compressed_tokens = count_tokens_uncached(compressed)
 
-                # Simulate old: individual commit per file
-                conn.execute(
-                    """
-                    INSERT OR REPLACE INTO blocks VALUES (?,?,?,?,?,?,?,?,?,?)
-                """,
-                    (
-                        path,
-                        hashlib.sha256(content.encode()).hexdigest(),
-                        1,
-                        file_type,
-                        raw_tokens,
-                        compressed_tokens,
-                        compressed,
-                        1.0,
-                        5.0,
-                        time.time(),
-                    ),
-                )
-                conn.commit()  # Commit per file = slow
-                processed += 1
+                    # Simulate old: individual commit per file
+                    conn.execute(
+                        """
+                        INSERT OR REPLACE INTO blocks VALUES (?,?,?,?,?,?,?,?,?,?)
+                    """,
+                        (
+                            path,
+                            hashlib.sha256(content.encode()).hexdigest(),
+                            1,
+                            file_type,
+                            raw_tokens,
+                            compressed_tokens,
+                            compressed,
+                            1.0,
+                            5.0,
+                            time.time(),
+                        ),
+                    )
+                    conn.commit()  # Commit per file = slow
+                    processed += 1
 
-            elapsed = time.perf_counter() - start
-            times.append((elapsed, processed))
-            conn.close()
+                elapsed = time.perf_counter() - start
+                times.append((elapsed, processed))
+            finally:
+                conn.close()
 
     avg_time = statistics.mean([t[0] for t in times])
     avg_files = statistics.mean([t[1] for t in times])

@@ -107,6 +107,13 @@ class JournalStore:
             self._write_conn = self._connect()
         return self._write_conn
 
+    def close(self) -> None:
+        """Close the cached write connection; a later write reopens it."""
+        with self._write_lock:
+            conn, self._write_conn = self._write_conn, None
+        if conn is not None:
+            conn.close()
+
     @staticmethod
     def _rollback_cached_writer(conn: sqlite3.Connection) -> None:
         """Clear a failed write's pending transaction on the cached writer.
@@ -213,27 +220,31 @@ class JournalStore:
     def get_session(self, session_id: str) -> Optional[SessionRecord]:
         """Retrieve a session record."""
         conn = self._connect()
-        conn.row_factory = sqlite3.Row
-        row = conn.execute("SELECT * FROM sessions WHERE session_id = ?", (session_id,)).fetchone()
-        entry_count = conn.execute(
-            "SELECT COUNT(*) FROM entries WHERE session_id = ?", (session_id,)
-        ).fetchone()[0]
-        conn.close()
-        if not row:
-            return None
-        return SessionRecord(
-            session_id=row["session_id"],
-            started_at=row["started_at"],
-            ended_at=row["ended_at"],
-            project_dir=row["project_dir"],
-            model=row["model"],
-            total_requests=row["total_requests"],
-            total_cost_usd=row["total_cost_usd"],
-            total_input_tokens=row["total_input_tokens"],
-            total_output_tokens=row["total_output_tokens"],
-            entry_count=entry_count,
-            capsule_path=row["capsule_path"],
-        )
+        try:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT * FROM sessions WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            entry_count = conn.execute(
+                "SELECT COUNT(*) FROM entries WHERE session_id = ?", (session_id,)
+            ).fetchone()[0]
+            if not row:
+                return None
+            return SessionRecord(
+                session_id=row["session_id"],
+                started_at=row["started_at"],
+                ended_at=row["ended_at"],
+                project_dir=row["project_dir"],
+                model=row["model"],
+                total_requests=row["total_requests"],
+                total_cost_usd=row["total_cost_usd"],
+                total_input_tokens=row["total_input_tokens"],
+                total_output_tokens=row["total_output_tokens"],
+                entry_count=entry_count,
+                capsule_path=row["capsule_path"],
+            )
+        finally:
+            conn.close()
 
     def get_entries(
         self,
@@ -245,27 +256,29 @@ class JournalStore:
         import json
 
         conn = self._connect()
-        conn.row_factory = sqlite3.Row
-        if entry_type:
-            rows = conn.execute(
-                "SELECT * FROM entries WHERE session_id = ? AND entry_type = ? ORDER BY timestamp DESC LIMIT ?",
-                (session_id, entry_type, limit),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                "SELECT * FROM entries WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
-                (session_id, limit),
-            ).fetchall()
-        conn.close()
-        return [
-            JournalEntry(
-                timestamp=r["timestamp"],
-                entry_type=r["entry_type"],
-                content=r["content"],
-                metadata=json.loads(r["metadata_json"]),
-            )
-            for r in rows
-        ]
+        try:
+            conn.row_factory = sqlite3.Row
+            if entry_type:
+                rows = conn.execute(
+                    "SELECT * FROM entries WHERE session_id = ? AND entry_type = ? ORDER BY timestamp DESC LIMIT ?",
+                    (session_id, entry_type, limit),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    "SELECT * FROM entries WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
+                    (session_id, limit),
+                ).fetchall()
+            return [
+                JournalEntry(
+                    timestamp=r["timestamp"],
+                    entry_type=r["entry_type"],
+                    content=r["content"],
+                    metadata=json.loads(r["metadata_json"]),
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()
 
     def record_savings(
         self,
@@ -344,27 +357,29 @@ class JournalStore:
     def recent_sessions(self, limit: int = 10) -> list[SessionRecord]:
         """List recent sessions, newest first."""
         conn = self._connect()
-        conn.row_factory = sqlite3.Row
-        rows = conn.execute(
-            "SELECT sessions.*, (SELECT COUNT(*) FROM entries "
-            "WHERE entries.session_id = sessions.session_id) AS entry_count "
-            "FROM sessions ORDER BY started_at DESC LIMIT ?",
-            (limit,),
-        ).fetchall()
-        conn.close()
-        return [
-            SessionRecord(
-                session_id=r["session_id"],
-                started_at=r["started_at"],
-                ended_at=r["ended_at"],
-                project_dir=r["project_dir"],
-                model=r["model"],
-                total_requests=r["total_requests"],
-                total_cost_usd=r["total_cost_usd"],
-                total_input_tokens=r["total_input_tokens"],
-                total_output_tokens=r["total_output_tokens"],
-                entry_count=r["entry_count"],
-                capsule_path=r["capsule_path"],
-            )
-            for r in rows
-        ]
+        try:
+            conn.row_factory = sqlite3.Row
+            rows = conn.execute(
+                "SELECT sessions.*, (SELECT COUNT(*) FROM entries "
+                "WHERE entries.session_id = sessions.session_id) AS entry_count "
+                "FROM sessions ORDER BY started_at DESC LIMIT ?",
+                (limit,),
+            ).fetchall()
+            return [
+                SessionRecord(
+                    session_id=r["session_id"],
+                    started_at=r["started_at"],
+                    ended_at=r["ended_at"],
+                    project_dir=r["project_dir"],
+                    model=r["model"],
+                    total_requests=r["total_requests"],
+                    total_cost_usd=r["total_cost_usd"],
+                    total_input_tokens=r["total_input_tokens"],
+                    total_output_tokens=r["total_output_tokens"],
+                    entry_count=r["entry_count"],
+                    capsule_path=r["capsule_path"],
+                )
+                for r in rows
+            ]
+        finally:
+            conn.close()

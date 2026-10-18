@@ -231,6 +231,7 @@ def _write_cache_invalidator_events(
     """
     if not events:
         return
+    conn = None
     try:
         conn = sqlite3.connect(str(db_path))
         for event in events:
@@ -247,6 +248,8 @@ def _write_cache_invalidator_events(
                 ),
             )
         conn.commit()
-        conn.close()
     except Exception:
         pass  # fail-open: never break a request over telemetry writes
+    finally:
+        if conn is not None:
+            conn.close()
