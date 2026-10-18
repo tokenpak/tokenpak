@@ -29,13 +29,16 @@ the non-self-metering restart proof hold for the calibrated path too.
 
 from __future__ import annotations
 
+import functools
 import logging
 import math
+import os
 import sqlite3
 import threading
+from array import array
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Sequence, TypeVar
+from typing import Iterable, Sequence, TypeVar
 
 from tokenpak.core.contracts.session_economics import (
     Coverage,
@@ -90,7 +93,7 @@ MIN_TURNS = 4
 # database-provided identifier is ever interpolated into executable SQL.
 _CORPUS_QUERY_BY_EFFORT_PROVENANCE: dict[tuple[bool, bool], str] = {
     (False, False): (
-        "SELECT session_id, model, reasoning_effort, "
+        "SELECT id, session_id, model, reasoning_effort, "
         "'' AS reasoning_effort_source, '' AS reasoning_effort_raw, timestamp, "
         "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
         "provider_input_tokens, provider_output_tokens, "
@@ -101,7 +104,7 @@ _CORPUS_QUERY_BY_EFFORT_PROVENANCE: dict[tuple[bool, bool], str] = {
         "ORDER BY timestamp ASC, id ASC"
     ),
     (False, True): (
-        "SELECT session_id, model, reasoning_effort, "
+        "SELECT id, session_id, model, reasoning_effort, "
         "'' AS reasoning_effort_source, reasoning_effort_raw, timestamp, "
         "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
         "provider_input_tokens, provider_output_tokens, "
@@ -112,7 +115,7 @@ _CORPUS_QUERY_BY_EFFORT_PROVENANCE: dict[tuple[bool, bool], str] = {
         "ORDER BY timestamp ASC, id ASC"
     ),
     (True, False): (
-        "SELECT session_id, model, reasoning_effort, "
+        "SELECT id, session_id, model, reasoning_effort, "
         "reasoning_effort_source, '' AS reasoning_effort_raw, timestamp, "
         "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
         "provider_input_tokens, provider_output_tokens, "
@@ -123,7 +126,7 @@ _CORPUS_QUERY_BY_EFFORT_PROVENANCE: dict[tuple[bool, bool], str] = {
         "ORDER BY timestamp ASC, id ASC"
     ),
     (True, True): (
-        "SELECT session_id, model, reasoning_effort, "
+        "SELECT id, session_id, model, reasoning_effort, "
         "reasoning_effort_source, reasoning_effort_raw, timestamp, "
         "input_tokens, output_tokens, cache_read_tokens, cache_creation_tokens, "
         "provider_input_tokens, provider_output_tokens, "
@@ -221,8 +224,8 @@ class _CorpusEntry:
 
 
 _CACHE_LOCK = threading.Lock()
-#: db_path -> (fingerprint, corpus entries). Bounded small; process-local.
-_CORPUS_CACHE: dict[str, tuple[tuple[int, int], tuple[_CorpusEntry, ...]]] = {}
+#: db_path -> incremental corpus state. Bounded small; process-local.
+_CORPUS_CACHE: dict[str, "_CorpusState"] = {}
 #: One participant's (model, effort, ended_at, turns, total, turn_costs) tuple.
 _ParticipantSignature = tuple[tuple[str, str, str, int, float, tuple[float, ...]], ...]
 #: (db_path, cell key, cell signature, pool signature) -> readiness.
@@ -232,6 +235,165 @@ _ReadinessCacheKey = tuple[
 _READINESS_CACHE: dict[_ReadinessCacheKey, CellReadiness] = {}
 _CORPUS_CACHE_MAX = 4
 _READINESS_CACHE_MAX = 32
+#: Bound on per-turn totals kept across all sessions of one ledger (8 bytes
+#: each). Past it, sessions outside the corpus window drop their totals.
+_CORPUS_MAX_TRACKED_TURNS = 1_000_000
+
+#: (type rank, value, row id): SQLite's ``ORDER BY timestamp ASC, id ASC``.
+_RowKey = tuple[int, object, int]
+
+
+def _row_key(timestamp: object, row_id: int) -> _RowKey:
+    if timestamp is None:
+        return (0, 0, row_id)
+    if isinstance(timestamp, (int, float)) and not isinstance(timestamp, bool):
+        return (1, float(timestamp), row_id)
+    if isinstance(timestamp, str):
+        return (2, timestamp, row_id)
+    return (3, bytes(timestamp), row_id)  # type: ignore[arg-type]
+
+
+_UNBUILT = object()
+
+
+class _SessionAccumulator:
+    """One session's corpus inputs, folded row by row in ledger order.
+
+    Holds exactly what ``_parse_corpus`` needs from the session's rows, so
+    appending a row costs O(1) instead of re-reading the session.
+    """
+
+    __slots__ = (
+        "first_key",
+        "last_key",
+        "last_timestamp",
+        "model",
+        "effort",
+        "mixed",
+        "costs",
+        "cached",
+    )
+
+    def __init__(self, key: _RowKey) -> None:
+        self.first_key = key
+        self.last_key = key
+        self.last_timestamp: object = None
+        self.model: str | None = None
+        self.effort: str | None = None
+        #: A session crossing model or effort boundaries (or carrying an
+        #: unsupported effort) never trains a cell; appends cannot undo it.
+        self.mixed = False
+        #: Positive per-turn totals in ledger order; None once evicted.
+        self.costs: array[float] | None = array("d")
+        #: The entry built from the current state, reused until a row lands.
+        self.cached: _CorpusEntry | None | object = _UNBUILT
+
+    def add(self, row: sqlite3.Row, key: _RowKey) -> None:
+        model = str(row["model"] or "unknown").strip() or "unknown"
+        effort, unsupported = _reasoning_effort_cell(
+            row["reasoning_effort"],
+            row["reasoning_effort_raw"],
+            row["reasoning_effort_source"],
+        )
+        if self.model is None:
+            self.model, self.effort = model, effort
+        elif model != self.model or effort != self.effort:
+            self.mixed = True
+        if unsupported:
+            self.mixed = True
+        if self.mixed:
+            if self.costs:
+                self.costs = array("d")
+        else:
+            cost = _row_total(row)
+            if cost > 0 and self.costs is not None:
+                self.costs.append(cost)
+        self.last_key = key
+        self.last_timestamp = row["timestamp"]
+        self.cached = _UNBUILT
+
+    def entry(self, session_id: str) -> _CorpusEntry | None:
+        if self.cached is _UNBUILT:
+            self.cached = self._build(session_id)
+        return self.cached  # type: ignore[return-value]
+
+    def _build(self, session_id: str) -> _CorpusEntry | None:
+        if self.mixed or self.costs is None or len(self.costs) < MIN_TURNS:
+            return None
+        last_ts = _parse_ts_utc(self.last_timestamp)
+        if last_ts is None:
+            return None
+        return _CorpusEntry(
+            session_id=session_id,
+            session=HistorySession(
+                model=self.model or "unknown",
+                effort=self.effort or "unknown",
+                ended_at=last_ts,
+                turn_costs=tuple(self.costs),
+            ),
+        )
+
+
+def _fold_rows(
+    sessions: dict[str, _SessionAccumulator], rows: Iterable[sqlite3.Row], *, appended: bool
+) -> bool:
+    """Fold rows into per-session accumulators.
+
+    Full parses pass rows in ``ORDER BY timestamp, id`` order. Appended rows
+    arrive in id order; one that would land before a row already folded for
+    its session (a write race or a clock step back), or that belongs to an
+    evicted session, returns False so the caller re-parses the ledger.
+    """
+    for row in rows:
+        sid = str(row["session_id"]).strip()
+        if not sid:
+            continue
+        key = _row_key(row["timestamp"], int(row["id"]))
+        acc = sessions.get(sid)
+        if acc is None:
+            acc = sessions[sid] = _SessionAccumulator(key)
+        elif appended and (key < acc.last_key or acc.costs is None):
+            return False
+        acc.add(row, key)
+    return True
+
+
+def _windowed(sessions: dict[str, _SessionAccumulator]) -> tuple[_CorpusEntry, ...]:
+    """Every corpus entry ordered by end time, newest ``MAX_SESSIONS * 3``.
+
+    Ties keep first-appearance order, exactly like a stable sort of a full
+    ``ORDER BY timestamp, id`` scan.
+    """
+    ranked = []
+    for sid, acc in sessions.items():
+        entry = acc.entry(sid)
+        if entry is not None:
+            ranked.append((entry.session.ended_at, acc.first_key, entry))
+    ranked.sort(key=lambda item: (item[0], item[1]))
+    # Bound memory ahead of the per-call finished filter; newest win. This is
+    # a semantics choice, not a cache artifact: cached and fresh parses share
+    # this exact truncation, so they can never diverge from each other.
+    return tuple(entry for _, _, entry in ranked[-(MAX_SESSIONS * 3) :])
+
+
+class _ParsedCorpus(tuple):  # type: ignore[type-arg]
+    """A parsed corpus that also carries the accumulators that produced it."""
+
+    sessions: dict[str, _SessionAccumulator] | None = None
+    variant: tuple[bool, bool] | None = None
+
+
+@dataclass
+class _CorpusState:
+    identity: tuple[int, int]
+    variant: tuple[bool, bool]
+    max_id: int
+    count: int
+    sessions: dict[str, _SessionAccumulator]
+    corpus: tuple[_CorpusEntry, ...]
+    #: Newest (ended_at, first key) among corpus sessions whose per-turn
+    #: totals were dropped by the turn bound; None while nothing is evicted.
+    evicted_rank: tuple[object, _RowKey] | None = None
 
 
 def _ledger_fingerprint(conn: sqlite3.Connection) -> tuple[int, int]:
@@ -246,70 +408,106 @@ def _connect_ro(path: str) -> sqlite3.Connection:
     return sqlite3.connect(f"file:{quote(path)}?mode=ro", uri=True, timeout=5.0)
 
 
-def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
+def _variant(conn: sqlite3.Connection) -> tuple[bool, bool]:
     available = {str(row[1]) for row in conn.execute("PRAGMA table_info(requests)").fetchall()}
-    query = _CORPUS_QUERY_BY_EFFORT_PROVENANCE[
-        (
-            "reasoning_effort_source" in available,
-            "reasoning_effort_raw" in available,
-        )
-    ]
-    rows = conn.execute(query).fetchall()
-    grouped: dict[str, list[sqlite3.Row]] = {}
-    for row in rows:
-        sid = str(row["session_id"]).strip()
-        if sid:
-            grouped.setdefault(sid, []).append(row)
-    entries: list[_CorpusEntry] = []
-    for sid, srows in grouped.items():
-        last_ts = _parse_ts_utc(srows[-1]["timestamp"])
-        if last_ts is None:
+    return ("reasoning_effort_source" in available, "reasoning_effort_raw" in available)
+
+
+def _parse_corpus(conn: sqlite3.Connection) -> tuple[_CorpusEntry, ...]:
+    variant = _variant(conn)
+    sessions: dict[str, _SessionAccumulator] = {}
+    # Stream the cursor: the full ledger is never materialised at once.
+    _fold_rows(sessions, conn.execute(_CORPUS_QUERY_BY_EFFORT_PROVENANCE[variant]), appended=False)
+    parsed = _ParsedCorpus(_windowed(sessions))
+    parsed.sessions = sessions
+    parsed.variant = variant
+    return parsed
+
+
+def _appended_rows(
+    conn: sqlite3.Connection, variant: tuple[bool, bool], after_id: int
+) -> list[sqlite3.Row]:
+    query = (
+        _CORPUS_QUERY_BY_EFFORT_PROVENANCE[variant]
+        .replace("WHERE session_id IS NOT NULL", "WHERE id > ? AND session_id IS NOT NULL")
+        .replace("ORDER BY timestamp ASC, id ASC", "ORDER BY id ASC")
+    )
+    return conn.execute(query, (after_id,)).fetchall()
+
+
+def _bound_tracked_turns(state: _CorpusState) -> None:
+    """Past the turn bound, drop the totals of the oldest sessions outside the window."""
+    tracked = sum(len(a.costs) for a in state.sessions.values() if a.costs is not None)
+    if tracked <= _CORPUS_MAX_TRACKED_TURNS:
+        return
+    window = {e.session_id for e in state.corpus}
+    candidates = []
+    for sid, acc in state.sessions.items():
+        if sid in window or not acc.costs:
             continue
-        models = {str(row["model"] or "unknown").strip() or "unknown" for row in srows}
-        effort_observations = [
-            _reasoning_effort_cell(
-                row["reasoning_effort"],
-                row["reasoning_effort_raw"],
-                row["reasoning_effort_source"],
-            )
-            for row in srows
-        ]
-        efforts = {label for label, _unsupported in effort_observations}
-        if (
-            len(models) != 1
-            or len(efforts) != 1
-            or any(unsupported for _label, unsupported in effort_observations)
-        ):
-            # A stable session identity can legitimately cross model or
-            # effort boundaries. Its spend remains observable elsewhere, but
-            # its total cannot train either homogeneous calibration cell.
-            continue
-        costs = tuple(c for c in (_row_total(r) for r in srows) if c > 0)
-        if len(costs) < MIN_TURNS:
-            continue
-        model = next(iter(models))
-        effort = next(iter(efforts))
-        entries.append(
-            _CorpusEntry(
-                session_id=sid,
-                session=HistorySession(
-                    model=model, effort=effort, ended_at=last_ts, turn_costs=costs
-                ),
-            )
-        )
-    entries.sort(key=lambda e: e.session.ended_at)
-    # Bound memory ahead of the per-call finished filter; newest win. This is
-    # a semantics choice, not a cache artifact: cached and fresh parses share
-    # this exact truncation, so they can never diverge from each other.
-    return tuple(entries[-(MAX_SESSIONS * 3) :])
+        entry = acc.entry(sid)
+        rank = (entry.session.ended_at, acc.first_key) if entry is not None else None
+        candidates.append((acc.last_key, acc, rank))
+    candidates.sort(key=lambda item: item[0])
+    for _, acc, rank in candidates:
+        if tracked <= _CORPUS_MAX_TRACKED_TURNS:
+            break
+        tracked -= len(acc.costs or ())
+        acc.costs = None
+        acc.cached = _UNBUILT
+        if rank is not None and (state.evicted_rank is None or rank > state.evicted_rank):
+            state.evicted_rank = rank
+
+
+def _refresh(conn: sqlite3.Connection, state: _CorpusState, fingerprint: tuple[int, int]) -> bool:
+    """Bring ``state`` up to ``fingerprint`` from appended rows only.
+
+    Returns False when appends alone cannot reproduce a full parse: rows were
+    deleted or the file was replaced, the schema variant changed, a row
+    arrived out of order, or a session whose totals were evicted changed.
+    """
+    max_id, count = fingerprint
+    if max_id < state.max_id or _variant(conn) != state.variant:
+        return False
+    appended = conn.execute(
+        "SELECT COUNT(*) FROM requests WHERE id > ?", (state.max_id,)
+    ).fetchone()
+    if state.count + int(appended[0] or 0) != count:
+        return False
+    if not _fold_rows(
+        state.sessions, _appended_rows(conn, state.variant, state.max_id), appended=True
+    ):
+        return False
+    corpus = _windowed(state.sessions)
+    if state.evicted_rank is not None:
+        # Evicted sessions rank below the window only while the window is
+        # full and its oldest entry is newer than every one of them.
+        if len(corpus) < MAX_SESSIONS * 3:
+            return False
+        oldest = corpus[0]
+        oldest_rank = (oldest.session.ended_at, state.sessions[oldest.session_id].first_key)
+        if oldest_rank <= state.evicted_rank:
+            return False
+    state.max_id, state.count, state.corpus = max_id, count, corpus
+    _bound_tracked_turns(state)
+    return True
+
+
+def _file_identity(path: str) -> tuple[int, int]:
+    st = os.stat(path)
+    return (st.st_dev, st.st_ino)
 
 
 def _corpus_for(monitor_db_path: str) -> tuple[_CorpusEntry, ...]:
-    """Fingerprint-cached parsed corpus; identical to an uncached parse.
+    """Incrementally maintained parsed corpus; identical to a full parse.
 
-    The fingerprint (max id, row count) changes on any ledger append, so a
-    hit can only serve data equal to what a fresh parse would produce —
-    determinism and the non-self-metering claims are unaffected.
+    The ledger is append-only. A warm cache folds in only the rows appended
+    since the last read (``id > last max id``), so each call reads O(new
+    rows) instead of the whole ledger; anything appends cannot explain (a
+    deletion, a replaced file, a schema change, an out-of-order row) falls
+    back to a full parse. The result always equals what a fresh full parse
+    of the same snapshot returns — determinism and the non-self-metering
+    claims are unaffected.
     """
     try:
         conn = _connect_ro(monitor_db_path)
@@ -329,10 +527,22 @@ def _corpus_for(monitor_db_path: str) -> tuple[_CorpusEntry, ...]:
                 if table is None:
                     return ()
                 fingerprint = _ledger_fingerprint(conn)
+                identity = _file_identity(monitor_db_path)
                 with _CACHE_LOCK:
-                    cached = _CORPUS_CACHE.get(monitor_db_path)
-                    if cached is not None and cached[0] == fingerprint:
-                        return cached[1]
+                    state = _CORPUS_CACHE.get(monitor_db_path)
+                    if state is not None and state.identity == identity:
+                        if (state.max_id, state.count) == fingerprint:
+                            return state.corpus
+                        refreshed = False
+                        try:
+                            refreshed = _refresh(conn, state, fingerprint)
+                        finally:
+                            if not refreshed:
+                                # A refused or failed refresh may have folded
+                                # part of the appended rows: never reuse it.
+                                _CORPUS_CACHE.pop(monitor_db_path, None)
+                        if refreshed:
+                            return state.corpus
                 corpus = _parse_corpus(conn)
             finally:
                 try:
@@ -341,14 +551,30 @@ def _corpus_for(monitor_db_path: str) -> tuple[_CorpusEntry, ...]:
                     pass
         finally:
             conn.close()
-    except sqlite3.Error as exc:
+    except (sqlite3.Error, OSError) as exc:
         logger.debug("calibration history read failed: %s", exc)
         return ()
+    sessions = getattr(corpus, "sessions", None)
+    variant = getattr(corpus, "variant", None)
     with _CACHE_LOCK:
         if len(_CORPUS_CACHE) >= _CORPUS_CACHE_MAX and monitor_db_path not in _CORPUS_CACHE:
             _CORPUS_CACHE.pop(next(iter(_CORPUS_CACHE)))
-        _CORPUS_CACHE[monitor_db_path] = (fingerprint, corpus)
-    return corpus
+        if sessions is None or variant is None:
+            # A corpus without its accumulators cannot be refreshed in
+            # place; keep nothing so the next call parses again.
+            _CORPUS_CACHE.pop(monitor_db_path, None)
+        else:
+            state = _CorpusState(
+                identity=identity,
+                variant=variant,
+                max_id=fingerprint[0],
+                count=fingerprint[1],
+                sessions=sessions,
+                corpus=tuple(corpus),
+            )
+            _bound_tracked_turns(state)
+            _CORPUS_CACHE[monitor_db_path] = state
+    return tuple(corpus)
 
 
 def read_history(
@@ -380,6 +606,7 @@ def _cell_key(model: str, effort: str) -> tuple[str, str]:
     return (model.strip() or "unknown", effort.strip() or "unknown")
 
 
+@functools.lru_cache(maxsize=4096)
 def _session_kys(s: HistorySession) -> tuple[tuple[int, float], ...]:
     """One session's (turn-index, y) samples; y = log remaining multiplier."""
     out: list[tuple[int, float]] = []
