@@ -4135,6 +4135,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         db_path = monitor.db_path if monitor is not None else str(_paths.under("monitor.db"))
 
         sessions: list[dict[str, object]] = []
+        conn = None
         try:
             conn = _sqlite3.connect(str(db_path), timeout=3.0)
             conn.row_factory = _sqlite3.Row
@@ -4186,11 +4187,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "platform": row["platform"] or "unknown",
                     }
                 )
-            conn.close()
         except Exception as exc:
             import logging as _logging
 
             _logging.getLogger(__name__).warning("metrics/dashboard sessions query failed: %s", exc)
+        finally:
+            if conn is not None:
+                conn.close()
 
         # Last-24h original-vs-compressed totals for the compression chart.
         # Reuses Monitor.get_stats(), the same real-data path `tokenpak status`
