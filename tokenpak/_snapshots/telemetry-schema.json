@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-12T23:06:37Z",
+  "generated_at": "2026-10-18T09:06:16Z",
   "stores": [
     {
       "path": "~/.tpk/telemetry.db",
@@ -159,6 +159,11 @@
           },
           {
             "type": "index",
+            "name": "idx_pending_answered",
+            "sql": "CREATE INDEX idx_pending_answered ON pending_requests(session_id, answered_by)"
+          },
+          {
+            "type": "index",
             "name": "idx_pending_hash",
             "sql": "CREATE INDEX idx_pending_hash ON pending_requests(request_hash, status)"
           },
@@ -190,7 +195,7 @@
           {
             "type": "table",
             "name": "pending_requests",
-            "sql": "CREATE TABLE pending_requests (\n            pending_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL,\n            created_at REAL NOT NULL,\n            expires_at REAL NOT NULL,\n            request_hash TEXT NOT NULL,\n            provider TEXT NOT NULL DEFAULT '',\n            model TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            raw_request_blob BLOB NOT NULL,\n            raw_request_headers TEXT NOT NULL DEFAULT '{}',\n            target_url TEXT NOT NULL DEFAULT '',\n            status TEXT NOT NULL DEFAULT 'pending'\n        )"
+            "sql": "CREATE TABLE pending_requests (\n            pending_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL,\n            created_at REAL NOT NULL,\n            expires_at REAL NOT NULL,\n            request_hash TEXT NOT NULL,\n            provider TEXT NOT NULL DEFAULT '',\n            model TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            raw_request_blob BLOB NOT NULL,\n            raw_request_headers TEXT NOT NULL DEFAULT '{}',\n            target_url TEXT NOT NULL DEFAULT '',\n            status TEXT NOT NULL DEFAULT 'pending'\n        , answered_by TEXT NOT NULL DEFAULT '')"
           },
           {
             "type": "table",
