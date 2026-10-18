@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import itertools
 import json
 
 import pytest
@@ -10,7 +11,7 @@ import pytest
 from tokenpak.proxy.spend_guard import block_response
 from tokenpak.proxy.spend_guard.contracts import TIPDirective
 from tokenpak.proxy.spend_guard.intent import Intent
-from tokenpak.proxy.spend_guard.pending import PendingStore
+from tokenpak.proxy.spend_guard.pending import PendingStore, hash_request
 from tokenpak.proxy.spend_guard.policy import SpendGuardConfig
 from tokenpak.proxy.spend_guard.replay import resolve_pending
 
@@ -25,6 +26,13 @@ _BUILDERS = {
     "reprompt": block_response.reprompt,
     "pending_waiting": block_response.pending_waiting,
 }
+
+_REPLIES = itertools.count()
+
+
+def _fresh_reply() -> str:
+    """A reply hash no earlier request in the store has used."""
+    return f"reply-{next(_REPLIES)}"
 
 
 def _make_pending(
@@ -57,6 +65,7 @@ class TestPositiveIntentReplay:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.kind == "replay"
         assert out.body == original  # byte-identical
@@ -75,6 +84,7 @@ class TestPositiveIntentReplay:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.headers == {"anthropic-version": "2023-06-01"}
         assert "X-Api-Key" not in out.headers
@@ -88,6 +98,7 @@ class TestPositiveIntentReplay:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.target_url == "https://example.com/v1/messages"
 
@@ -100,6 +111,7 @@ class TestPositiveIntentReplay:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out1.kind == "replay"
         # Second attempt — already consumed, falls back to pending_waiting block.
@@ -110,6 +122,7 @@ class TestPositiveIntentReplay:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out2.kind == "block"
         assert out2.audit_event == "replay_race"
@@ -125,6 +138,7 @@ class TestNegativeIntentCancel:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.kind == "cancel"
         assert out.http_status == 200
@@ -140,6 +154,7 @@ class TestNegativeIntentCancel:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert store.get_by_session("sess-X") is None
 
@@ -154,6 +169,7 @@ class TestAmbiguousReprompt:
             tip=None,
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.kind == "reprompt"
         assert out.http_status == 402
@@ -171,6 +187,7 @@ class TestTIPAuthorize:
             tip=TIPDirective(allow_scope="once", max_cost_usd=20.0),
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.kind == "replay"
 
@@ -185,6 +202,7 @@ class TestTIPAuthorize:
             tip=TIPDirective(allow_scope="once"),
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.kind == "cancel"
 
@@ -197,5 +215,49 @@ class TestTIPAuthorize:
             tip=TIPDirective(bypass=True),
             cfg=SpendGuardConfig(),
             builders=_BUILDERS,
+            reply_hash=_fresh_reply(),
         )
         assert out.kind == "replay"
+
+
+class TestReplyAnswersCurrentHold:
+    """A yes / no resolves one hold; a re-sent reply resolves none."""
+
+    def _resolve(self, store, pending, intent, reply_hash):
+        return resolve_pending(
+            store=store,
+            pending=pending,
+            intent=intent,
+            tip=None,
+            cfg=SpendGuardConfig(),
+            builders=_BUILDERS,
+            reply_hash=reply_hash,
+        )
+
+    @pytest.mark.parametrize("intent", [Intent.POSITIVE, Intent.NEGATIVE])
+    def test_reply_that_resolved_a_hold_cannot_resolve_the_next(self, store, intent):
+        first = _make_pending(store, body=b'{"messages":[{"role":"user","content":"a"}]}')
+        assert self._resolve(store, first, intent, "reply-yes").kind in ("replay", "cancel")
+        second = _make_pending(store, body=b'{"messages":[{"role":"user","content":"b"}]}')
+
+        out = self._resolve(store, second, intent, "reply-yes")
+
+        assert out.kind == "reprompt"
+        assert out.http_status == 402
+        assert out.audit_event == "stale_reply"
+        assert store.get_by_session("sess-X").pending_id == second.pending_id
+
+    def test_held_request_resent_is_not_its_own_answer(self, store):
+        held = b'{"messages":[{"role":"user","content":"continue"}]}'
+        pending = _make_pending(store, body=held)
+
+        out = self._resolve(store, pending, Intent.POSITIVE, hash_request(held, "claude-opus-4-7"))
+
+        assert out.audit_event == "stale_reply"
+        assert store.get_by_session("sess-X") is not None
+
+    def test_ambiguous_reply_is_reprompted_without_a_stale_check(self, store):
+        pending = _make_pending(store)
+        out = self._resolve(store, pending, Intent.AMBIGUOUS, pending.request_hash)
+        assert out.kind == "reprompt"
+        assert out.audit_event == "reprompt"

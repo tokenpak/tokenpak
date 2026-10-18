@@ -142,7 +142,7 @@ Same shape but `error.type=tokenpak_spend_guard_hard_blocked`, `retryable: false
 
 ### Interactive (Yes / No)
 
-After receiving a block response, send a request whose last user-message content is **exactly** one of:
+After receiving a block response, send a request whose newest input item is a user message that is **exactly** one of:
 
 - **Yes:** `yes`, `y`, `ok`, `okay`, `proceed`, `continue`, `approve`, `sure`, `go`, `go ahead`, `do it`, `run it`, `ship it`, `confirm`, `yep`, `yeah`, `let's go`, …
 - **No:** `no`, `n`, `nope`, `stop`, `cancel`, `abort`, `deny`, `don't`, `nevermind`, `skip`, …
@@ -150,6 +150,8 @@ After receiving a block response, send a request whose last user-message content
 Match is **strict whole-string** (case-insensitive, trims trailing punctuation). `"I'll go ahead and write..."` is **AMBIGUOUS** — it will not auto-approve. Ambiguous replies trigger a re-prompt; the held request stays.
 
 On Yes, the proxy replays the **original** held request byte-identically (with the original headers, including auth) — not the word `yes` itself.
+
+**One reply releases exactly one held request.** A reply counts only when it is the newest item in the request. In an agent's tool loop, your `yes` stays in the history while tool calls and tool results are added after it; those later requests are not new replies, so any of them that crosses a threshold is held and needs its own `yes`. A reply that was already used is also not a new answer: if the client re-sends the identical request (a retry), the guard re-prompts instead of releasing another held request. The audit log records this as `stale_reply`.
 
 ### Programmatic (`[TIP: ...]` directive)
 
@@ -244,7 +246,7 @@ GROUP BY session_id
 ORDER BY blocks DESC;
 ```
 
-Event types: `block`, `hard_block`, `warn`, `allow`, `tip_bypass`, `approve_yes`, `cancel_no`, `cancel`, `replay`, `reprompt`, `estimate`, `expire`, `anti_loop_hit`, `pending_waiting`, `replay_race`.
+Event types: `block`, `hard_block`, `warn`, `allow`, `tip_bypass`, `approve_yes`, `cancel_no`, `cancel`, `replay`, `reprompt`, `estimate`, `expire`, `anti_loop_hit`, `pending_waiting`, `replay_race`, `stale_reply`.
 
 The audit writer is best-effort and non-blocking — guard decisions never wait on the audit row, and IO errors are swallowed at DEBUG level.
 
@@ -268,7 +270,7 @@ To override locally without waiting for the next default-tuning rollout: set the
 The hard-block ceiling (default 1M tokens / $50) is immutable on purpose — this is the failsafe against catastrophic accidents. If you legitimately need to send something this large, raise `hard_block_tokens` / `hard_block_cost_usd` in `~/.tokenpak/config.yaml`. There's no run-time bypass.
 
 **"I get re-prompts even when I reply 'yes'."**
-Your reply isn't matching the strict-whole-string vocab. Check `~/tokenpak/tokenpak/proxy/spend_guard/intent.py:_POSITIVE` for the exact accepted set. Anything with extra words around the keyword (e.g. `"yes please"`) is AMBIGUOUS by design.
+Your reply isn't matching the strict-whole-string vocab. Check `~/tokenpak/tokenpak/proxy/spend_guard/intent.py:_POSITIVE` for the exact accepted set. Anything with extra words around the keyword (e.g. `"yes please"`) is AMBIGUOUS by design. Two other causes: the reply was not the newest item in the request (for example, the client added tool output after it), or the identical request had already released or cancelled a held request (`stale_reply` in the audit log). Send a new reply.
 
 **"The guard isn't firing — I see big requests going through."**
 Check `tokenpak status` and `sqlite3 ~/.tokenpak/spend_guard.db "SELECT COUNT(*) FROM spend_guard_audit"`. If zero rows: confirm `spend_guard.enabled=true` (`TOKENPAK_SPEND_GUARD_ENABLED=0` in env disables it), and that you restarted the proxy after upgrading. The proxy holds modules in memory — only restarts pick up code changes.

@@ -196,13 +196,16 @@ def evaluate(
                     "reprompt": build_reprompt,
                     "pending_waiting": build_pending_waiting,
                 },
+                # Raw bytes, hashed like a held request's ``request_hash``.
+                reply_hash=hash_request(body, model),
             )
+            resolution = "stale" if outcome.audit_event == "stale_reply" else "resolved"
             _audit(
                 cfg,
                 outcome.audit_event or "pending",
                 session_id,
                 decision_str=outcome.kind,
-                reason=f"pending_intent_resolved:{intent.value}",
+                reason=f"pending_intent_{resolution}:{intent.value}",
                 pending_id=existing_pending.pending_id,
                 projected_tokens=existing_pending.projected_tokens,
                 tip=tip_directive,

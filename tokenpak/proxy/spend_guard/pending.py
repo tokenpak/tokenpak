@@ -158,6 +158,22 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_hash ON pending_requests(request_hash, status)"
     )
+    # ``answered_by`` records the reply that released or discarded a held
+    # request, so the same reply cannot answer a second one.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(pending_requests)")}
+    if "answered_by" not in columns:
+        try:
+            conn.execute(
+                "ALTER TABLE pending_requests ADD COLUMN answered_by TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError as exc:
+            # Another process added it between the check and the ALTER.
+            if "duplicate column" not in str(exc).lower():
+                raise
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_answered "
+        "ON pending_requests(session_id, answered_by)"
+    )
     # One-time migration: redact credential headers from any rows written by
     # an older build that persisted raw headers (raw credential-on-disk
     # exposure). Gated by PRAGMA user_version so it runs exactly once per db;
@@ -346,8 +362,31 @@ class PendingStore:
             conn.close()
         return _row_to_pending(row) if row else None
 
+    def reply_seen(self, session_id: str, reply_hash: str) -> bool:
+        """Has this exact request already been held, or already answered one?
+
+        ``reply_hash`` is :func:`hash_request` of the replying request. A
+        match means the reply is a re-send — a client retry of a held
+        request, or of a reply that already released or discarded one —
+        rather than a new answer, so it must not resolve another hold.
+        """
+        if not session_id or not reply_hash:
+            return False
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            row = conn.execute(
+                """SELECT 1 FROM pending_requests
+                   WHERE session_id = ? AND (request_hash = ? OR answered_by = ?)
+                   LIMIT 1""",
+                (session_id, reply_hash, reply_hash),
+            ).fetchone()
+        finally:
+            conn.close()
+        return row is not None
+
     # -- consume / discard -------------------------------------------------
-    def consume(self, pending_id: str) -> Optional[PendingRequest]:
+    def consume(self, pending_id: str, *, answered_by: str = "") -> Optional[PendingRequest]:
         """Return the pending request and mark it consumed.
 
         Atomic: only succeeds once. The UPDATE is conditioned on
@@ -355,14 +394,16 @@ class PendingStore:
         callers exactly one wins the transition and gets the row back;
         the rest (and all subsequent calls) return None. This is what
         prevents a held request from being replayed to the provider twice.
+        ``answered_by`` records the approving reply's hash (see
+        :meth:`reply_seen`).
         """
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
             cur = conn.execute(
-                "UPDATE pending_requests SET status='consumed' "
+                "UPDATE pending_requests SET status='consumed', answered_by = ? "
                 "WHERE pending_id = ? AND status = 'pending'",
-                (pending_id,),
+                (answered_by, pending_id),
             )
             conn.commit()
             if cur.rowcount != 1:
@@ -375,14 +416,14 @@ class PendingStore:
             conn.close()
         return _row_to_pending(row) if row else None
 
-    def discard(self, pending_id: str) -> bool:
+    def discard(self, pending_id: str, *, answered_by: str = "") -> bool:
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
             cur = conn.execute(
-                "UPDATE pending_requests SET status='discarded' "
+                "UPDATE pending_requests SET status='discarded', answered_by = ? "
                 "WHERE pending_id = ? AND status = 'pending'",
-                (pending_id,),
+                (answered_by, pending_id),
             )
             conn.commit()
             return cur.rowcount > 0
