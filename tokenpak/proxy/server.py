@@ -822,6 +822,15 @@ class _ThreadedHTTPServer(HTTPServer):
             self.shutdown_request(accepted_socket)
             raise
 
+    def handle_error(self, request: object, client_address: object) -> None:
+        # A client that hung up before its response was written (a status
+        # line past its timeout, an interrupted stream) is routine. Printing
+        # a traceback for each one costs CPU and serialises request threads
+        # on stderr exactly when the proxy is busiest.
+        if _is_client_disconnect_error(sys.exc_info()[1] or Exception()):
+            return
+        super().handle_error(request, client_address)
+
     def _handle(
         self,
         request: socket.socket,
@@ -3876,14 +3885,39 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # Proxy-owned default: latest completed non-empty ledger session.
             session_id, selection_note = resolve_default_session_id(db_path)
 
+        from tokenpak.proxy.economics_gate import (
+            EconomicsBusy,
+            client_disconnected,
+            get_economics_gate,
+        )
+
+        if client_disconnected(self.connection):
+            return  # the poller gave up; nobody is waiting for this answer
         try:
-            economics = _build_session_economics_response(
-                session_id,
-                db_path,
-                model_hint=model_hint,
-                now=frozen_now,
+            # Bounded and single-flight: status lines poll this every ~2 s and
+            # give up after 0.5 s, so unbounded evaluations pile up threads.
+            economics = get_economics_gate().run(
+                (session_id, model_hint, now_field, str(db_path)),
+                lambda: _build_session_economics_response(
+                    session_id,
+                    db_path,
+                    model_hint=model_hint,
+                    now=frozen_now,
+                ),
             )
             response_body = economics.to_json().encode()
+        except EconomicsBusy:
+            busy = json.dumps(
+                {"error": {"type": "overloaded_error", "message": "Session economics is busy"}},
+                separators=(",", ":"),
+            ).encode()
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(busy)))
+            self.send_header("Retry-After", "2")
+            self.end_headers()
+            self.wfile.write(busy)
+            return
         except Exception:
             logger.exception("session-economics local ledger evaluation failed")
             _send_err(
