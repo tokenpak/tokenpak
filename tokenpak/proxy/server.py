@@ -2058,7 +2058,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if ps.compilation_mode != "transparent":
                 try:
                     from tokenpak.proxy.cache_invalidator import (
-                        _detect_cache_invalidators,
+                        _body_signature,
+                        _diff_signatures,
                         _get_session_cache,
                         _write_cache_invalidator_events,
                     )
@@ -2067,14 +2068,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
                     _ci_session_id = _resolve_session_id(self.headers, model)
                     _ci_cache = _get_session_cache()
-                    _ci_prev_body = _ci_cache.get(_ci_session_id)
-                    if _ci_prev_body is not None:
-                        _ci_events = _detect_cache_invalidators(_ci_prev_body, body)
+                    # Parse this body once; the cache keeps the previous
+                    # request's signature, never its raw body.
+                    _ci_prev_sig = _ci_cache.get(_ci_session_id)
+                    _ci_sig = _body_signature(body)
+                    if _ci_prev_sig is not None and _ci_sig is not None:
+                        _ci_events = _diff_signatures(_ci_prev_sig, _ci_sig)
                         if _ci_events:
                             _write_cache_invalidator_events(
                                 _CI_DB, None, _ci_session_id, _ci_events
                             )
-                    _ci_cache.put(_ci_session_id, body)
+                    _ci_cache.put(_ci_session_id, _ci_sig)
                 except Exception:
                     pass  # fail-open: never break a request over telemetry
 

@@ -19,15 +19,23 @@ telemetry — the goal is validating the detector against real Claude Code
 traffic, not guaranteeing 100% coverage across every restart edge case. LRU
 cap of 100 sessions prevents unbounded memory growth; oldest session is evicted
 when the cap is reached.
+
+The cache holds a compact signature of each session's last request (the
+canonical tools, system, thinking and tool_choice values and whether images
+are present), not the raw body, so each request body is parsed once rather
+than the previous body being parsed again on every POST. Entries are also
+bounded by total size: ``TOKENPAK_CACHE_INVALIDATOR_MAX_BYTES`` (default
+32 MiB) evicts the least recently used sessions first.
 """
 
 from __future__ import annotations
 
 import collections
 import json
+import os
 import sqlite3
 import threading
-from typing import Any, List, NamedTuple, Optional
+from typing import Any, List, NamedTuple, Optional, Union
 
 # ---------------------------------------------------------------------------
 # Event representation
@@ -41,36 +49,91 @@ class CacheInvalidatorEvent(NamedTuple):
 
 
 # ---------------------------------------------------------------------------
-# In-memory LRU session body cache
-# Cap: 100 sessions. Oldest session evicted on overflow.
+# In-memory LRU session cache
+# Caps: 100 sessions and TOKENPAK_CACHE_INVALIDATOR_MAX_BYTES of entries.
 # ---------------------------------------------------------------------------
+
+DEFAULT_CACHE_MAX_BYTES = 32 * 1024 * 1024
+
+
+def _cache_max_bytes() -> int:
+    raw = os.environ.get("TOKENPAK_CACHE_INVALIDATOR_MAX_BYTES", "")
+    try:
+        value = int(raw) if raw else DEFAULT_CACHE_MAX_BYTES
+    except ValueError:
+        return DEFAULT_CACHE_MAX_BYTES
+    return max(0, value)
+
+
+class _BodySignature(NamedTuple):
+    """The request fields the detector compares, in canonical form."""
+
+    tools: str
+    system: str
+    thinking: str
+    tool_choice: str
+    has_images: bool
+
+    @property
+    def nbytes(self) -> int:
+        return len(self.tools) + len(self.system) + len(self.thinking) + len(self.tool_choice)
+
+
+_CacheEntry = Union[bytes, _BodySignature, None]
+
+
+def _entry_size(entry: _CacheEntry) -> int:
+    if entry is None:
+        return 0
+    if isinstance(entry, _BodySignature):
+        return entry.nbytes
+    return len(entry)
 
 
 class _SessionBodyCache:
-    """Thread-safe in-memory LRU cache of last-seen request body per session_id."""
+    """Thread-safe in-memory LRU cache of the last request seen per session_id.
 
-    def __init__(self, maxsize: int = 100):
+    Bounded by entry count (``maxsize``) and by total entry size
+    (``max_bytes``); the least recently used session is evicted first, and an
+    entry larger than ``max_bytes`` on its own is not kept.
+    """
+
+    def __init__(self, maxsize: int = 100, max_bytes: Optional[int] = None):
         self._maxsize = maxsize
-        self._cache: collections.OrderedDict[str, bytes] = collections.OrderedDict()
+        self._max_bytes = _cache_max_bytes() if max_bytes is None else max(0, max_bytes)
+        self._bytes = 0
+        self._cache: collections.OrderedDict[str, _CacheEntry] = collections.OrderedDict()
         self._lock = threading.Lock()
 
-    def get(self, session_id: str) -> Optional[bytes]:
-        """Return the previously stored body for session_id, or None."""
+    def get(self, session_id: str) -> _CacheEntry:
+        """Return the stored entry for session_id, or None."""
         with self._lock:
             if session_id not in self._cache:
                 return None
             self._cache.move_to_end(session_id)
             return self._cache[session_id]
 
-    def put(self, session_id: str, body: bytes) -> None:
-        """Store body for session_id, evicting the oldest entry if at capacity."""
+    def put(self, session_id: str, body: _CacheEntry) -> None:
+        """Store the entry for session_id, evicting least recently used ones."""
+        size = _entry_size(body)
         with self._lock:
             if session_id in self._cache:
-                self._cache.move_to_end(session_id)
-            else:
-                if len(self._cache) >= self._maxsize:
-                    self._cache.popitem(last=False)  # evict LRU (oldest)
+                self._bytes -= _entry_size(self._cache.pop(session_id))
+            elif len(self._cache) >= self._maxsize:
+                _, evicted = self._cache.popitem(last=False)  # evict LRU (oldest)
+                self._bytes -= _entry_size(evicted)
+            if size > self._max_bytes:
+                return
             self._cache[session_id] = body
+            self._bytes += size
+            while self._bytes > self._max_bytes:
+                _, evicted = self._cache.popitem(last=False)
+                self._bytes -= _entry_size(evicted)
+
+    @property
+    def nbytes(self) -> int:
+        with self._lock:
+            return self._bytes
 
     def __len__(self) -> int:
         with self._lock:
@@ -133,6 +196,63 @@ def _has_images(messages: Any) -> bool:
 # ---------------------------------------------------------------------------
 
 
+def _body_signature(body: Union[bytes, str]) -> Optional[_BodySignature]:
+    """Parse a request body once into the fields the detector compares.
+
+    Returns None when the body is not a JSON object.
+    """
+    try:
+        parsed = json.loads(body)
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
+        return None
+    if not isinstance(parsed, dict):
+        return None
+    thinking = parsed.get("thinking")
+    return _BodySignature(
+        tools=_canonical_tools(parsed.get("tools", [])),
+        system=json.dumps(parsed.get("system", ""), sort_keys=True, ensure_ascii=False),
+        thinking=(
+            json.dumps(thinking, sort_keys=True, ensure_ascii=False)
+            if thinking is not None
+            else "null"
+        ),
+        tool_choice=json.dumps(parsed.get("tool_choice"), sort_keys=True, ensure_ascii=False),
+        has_images=_has_images(parsed.get("messages", [])),
+    )
+
+
+def _diff_signatures(
+    prev: _BodySignature,
+    curr: _BodySignature,
+) -> List[CacheInvalidatorEvent]:
+    """Events for the cache-relevant fields that differ between two requests."""
+    events: List[CacheInvalidatorEvent] = []
+    # ── tools_changed ──────────────────────────────────────────────────────
+    if prev.tools != curr.tools:
+        events.append(CacheInvalidatorEvent("tools_changed", prev.tools, curr.tools))
+    # ── system_changed ─────────────────────────────────────────────────────
+    if prev.system != curr.system:
+        events.append(CacheInvalidatorEvent("system_changed", prev.system, curr.system))
+    # ── thinking_mode_changed ──────────────────────────────────────────────
+    if prev.thinking != curr.thinking:
+        events.append(CacheInvalidatorEvent("thinking_mode_changed", prev.thinking, curr.thinking))
+    # ── tool_choice_changed ────────────────────────────────────────────────
+    if prev.tool_choice != curr.tool_choice:
+        events.append(
+            CacheInvalidatorEvent("tool_choice_changed", prev.tool_choice, curr.tool_choice)
+        )
+    # ── image_mode_changed ─────────────────────────────────────────────────
+    if prev.has_images != curr.has_images:
+        events.append(
+            CacheInvalidatorEvent(
+                "image_mode_changed",
+                "has_images" if prev.has_images else "no_images",
+                "has_images" if curr.has_images else "no_images",
+            )
+        )
+    return events
+
+
 def _detect_cache_invalidators(
     prev_body: bytes,
     curr_body: bytes,
@@ -151,67 +271,17 @@ def _detect_cache_invalidators(
         thinking_mode_changed   — thinking presence/absence or budget_tokens changed
         tool_choice_changed     — tool_choice differs
         image_mode_changed      — image content blocks added or removed
+
+    The proxy keeps each session's signature (``_body_signature``) and calls
+    ``_diff_signatures`` directly, so it parses each body only once.
     """
-    events: List[CacheInvalidatorEvent] = []
-
-    try:
-        prev = json.loads(prev_body)
-    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-        return events
-    try:
-        curr = json.loads(curr_body)
-    except (json.JSONDecodeError, ValueError, UnicodeDecodeError):
-        return events
-
-    # ── tools_changed ──────────────────────────────────────────────────────
-    prev_tools = _canonical_tools(prev.get("tools", []))
-    curr_tools = _canonical_tools(curr.get("tools", []))
-    if prev_tools != curr_tools:
-        events.append(CacheInvalidatorEvent("tools_changed", prev_tools, curr_tools))
-
-    # ── system_changed ─────────────────────────────────────────────────────
-    prev_system = json.dumps(prev.get("system", ""), sort_keys=True, ensure_ascii=False)
-    curr_system = json.dumps(curr.get("system", ""), sort_keys=True, ensure_ascii=False)
-    if prev_system != curr_system:
-        events.append(CacheInvalidatorEvent("system_changed", prev_system, curr_system))
-
-    # ── thinking_mode_changed ──────────────────────────────────────────────
-    prev_thinking = prev.get("thinking")
-    curr_thinking = curr.get("thinking")
-    prev_thinking_str = (
-        json.dumps(prev_thinking, sort_keys=True, ensure_ascii=False)
-        if prev_thinking is not None
-        else "null"
-    )
-    curr_thinking_str = (
-        json.dumps(curr_thinking, sort_keys=True, ensure_ascii=False)
-        if curr_thinking is not None
-        else "null"
-    )
-    if prev_thinking_str != curr_thinking_str:
-        events.append(
-            CacheInvalidatorEvent("thinking_mode_changed", prev_thinking_str, curr_thinking_str)
-        )
-
-    # ── tool_choice_changed ────────────────────────────────────────────────
-    prev_tc = json.dumps(prev.get("tool_choice"), sort_keys=True, ensure_ascii=False)
-    curr_tc = json.dumps(curr.get("tool_choice"), sort_keys=True, ensure_ascii=False)
-    if prev_tc != curr_tc:
-        events.append(CacheInvalidatorEvent("tool_choice_changed", prev_tc, curr_tc))
-
-    # ── image_mode_changed ─────────────────────────────────────────────────
-    prev_has_images = _has_images(prev.get("messages", []))
-    curr_has_images = _has_images(curr.get("messages", []))
-    if prev_has_images != curr_has_images:
-        events.append(
-            CacheInvalidatorEvent(
-                "image_mode_changed",
-                "has_images" if prev_has_images else "no_images",
-                "has_images" if curr_has_images else "no_images",
-            )
-        )
-
-    return events
+    prev = _body_signature(prev_body)
+    if prev is None:
+        return []
+    curr = _body_signature(curr_body)
+    if curr is None:
+        return []
+    return _diff_signatures(prev, curr)
 
 
 # ---------------------------------------------------------------------------
