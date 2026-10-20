@@ -152,6 +152,26 @@ def test_proxy_caches_a_signature_not_the_request_body(
     assert not isinstance(entry, (bytes, bytearray)), "the raw request body is cached"
 
 
+def test_byte_cap_counts_bytes_not_characters(monkeypatch) -> None:
+    """A non-ASCII prompt takes up to four bytes per character; the cap sees that."""
+    import sys
+
+    from tokenpak.proxy.cache_invalidator import _body_signature, _SessionBodyCache
+
+    monkeypatch.setenv("TOKENPAK_CACHE_INVALIDATOR_MAX_BYTES", str(256 << 10))
+    cache = _SessionBodyCache(maxsize=100)
+    for i in range(20):
+        # 20,000 characters, 80 KB as a Python string.
+        sig = _body_signature(_body(["a"], system=f"{i} " + "\U0001d11e" * 20_000))
+        assert sig is not None and sig.nbytes >= 4 * 20_000
+        cache.put(f"session-{i}", sig)
+    held = [cache.get(f"session-{i}") for i in range(20)]
+    real = sum(sum(sys.getsizeof(f) for f in e[:4]) for e in held if e is not None)
+    assert cache.nbytes <= 256 << 10
+    assert real <= 256 << 10
+    assert held[-1] is not None and held[0] is None
+
+
 # ---------------------------------------------------------------------------
 # Incremental calibration corpus
 # ---------------------------------------------------------------------------
