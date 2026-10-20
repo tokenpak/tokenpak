@@ -34,6 +34,7 @@ import collections
 import json
 import os
 import sqlite3
+import sys
 import threading
 from typing import Any, List, NamedTuple, Optional, Union
 
@@ -76,7 +77,14 @@ class _BodySignature(NamedTuple):
 
     @property
     def nbytes(self) -> int:
-        return len(self.tools) + len(self.system) + len(self.thinking) + len(self.tool_choice)
+        # Object sizes, not character counts: a non-ASCII string takes up to
+        # four bytes per character.
+        return (
+            sys.getsizeof(self.tools)
+            + sys.getsizeof(self.system)
+            + sys.getsizeof(self.thinking)
+            + sys.getsizeof(self.tool_choice)
+        )
 
 
 _CacheEntry = Union[bytes, _BodySignature, None]
