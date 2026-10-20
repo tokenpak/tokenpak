@@ -35,9 +35,12 @@ Replace the opening paragraph of **Yes-grant scope** with:
 
 Add to **Yes/No intent (interactive)**:
 
-> The reply must be the newest input item. When the newest item is anything
-> other than user text (assistant output, a tool call or result, reasoning),
-> the request carries no reply.
+> The reply must be the newest input item. A client may add the typed reply
+> to the user message that carries the latest tool results; the reply is
+> then the text after the last tool result, and the tool results themselves
+> are never read as a reply. When the newest item is anything else
+> (assistant output, a tool call, a tool result with nothing typed after it,
+> reasoning), the request carries no reply.
 
 Replace the **Yes-grant scope** test-coverage sentence "one POSITIVE intent
 covering subsequent held requests in the turn" with:

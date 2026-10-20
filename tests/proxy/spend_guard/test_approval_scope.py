@@ -141,6 +141,8 @@ def test_chat_completions_yes_must_be_newest_message(newest):
 
 
 def test_anthropic_tool_result_turn_is_not_an_answer():
+    # Nothing typed after the tool result; its output is not a reply. A
+    # reply typed after it is (test_claude_code_merged_reply.py).
     body = json.dumps(
         {
             "model": "claude-opus-4-7",
@@ -149,10 +151,7 @@ def test_anthropic_tool_result_turn_is_not_an_answer():
                 {"role": "assistant", "content": [{"type": "tool_use", "id": "t1"}]},
                 {
                     "role": "user",
-                    "content": [
-                        {"type": "tool_result", "tool_use_id": "t1", "content": "ok"},
-                        {"type": "text", "text": "yes"},
-                    ],
+                    "content": [{"type": "tool_result", "tool_use_id": "t1", "content": "yes"}],
                 },
             ],
         }

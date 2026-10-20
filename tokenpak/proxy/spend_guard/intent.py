@@ -84,6 +84,38 @@ _NEGATIVE = frozenset(
 )
 
 
+def _is_client_context(text: str) -> bool:
+    """A block the client adds around the operator's text, not typed by them."""
+    stripped = text.strip()
+    return stripped.startswith("<system-reminder>") and stripped.endswith("</system-reminder>")
+
+
+def _is_tool_result(block: object) -> bool:
+    return isinstance(block, dict) and str(block.get("type") or "").endswith("tool_result")
+
+
+def _typed_after_tool_result(content: list) -> str:
+    """The operator's text typed after the last tool result in ``content``.
+
+    Claude Code appends a reply typed after a 402 to the user message that
+    already carries the tool result (``[tool_result, text]``), and appends
+    each later reply to the same message. The reply is the last text block
+    with no tool result after it. Text inside a tool result is tool output
+    and is never read, and ``<system-reminder>`` blocks the client adds
+    around the typed text are skipped.
+    """
+    for block in reversed(content):
+        if not isinstance(block, dict):
+            continue
+        if _is_tool_result(block):
+            break
+        if block.get("type") == "text":
+            text = str(block.get("text") or "")
+            if not _is_client_context(text):
+                return text
+    return ""
+
+
 def _last_user_text(body: bytes) -> str:
     """Best-effort extract the operator's reply: the newest input item.
 
@@ -92,13 +124,15 @@ def _last_user_text(body: bytes) -> str:
     earlier ``yes`` as the last user-role message while tool calls and
     results pile up after it; reading it there would approve every later
     held request in the turn. So when the newest item is anything other
-    than user text (assistant output, a tool call, a tool result,
-    reasoning), there is no reply and this returns ``""``.
+    than user text (assistant output, a tool call, a tool result with
+    nothing typed after it, reasoning), there is no reply and this
+    returns ``""``.
 
     For an Anthropic ``/v1/messages`` or Chat Completions body, that's the
-    last message. For an OpenAI Responses body, the last ``input`` item.
-    For other shapes, returns the whole decoded body so trivial one-word
-    inputs still work.
+    last message (see :func:`_typed_after_tool_result` when it carries tool
+    results). For an OpenAI Responses body, the last ``input`` item. For
+    other shapes, returns the whole decoded body so trivial one-word inputs
+    still work.
     """
     try:
         body_text = body.decode("utf-8", errors="replace")
@@ -118,9 +152,8 @@ def _last_user_text(body: bytes) -> str:
         if isinstance(content, str):
             return content
         if isinstance(content, list):
-            # A tool-result turn is the agent's, even with text attached.
-            if any(isinstance(b, dict) and b.get("type") == "tool_result" for b in content):
-                return ""
+            if any(_is_tool_result(b) for b in content):
+                return _typed_after_tool_result(content)
             # Pick first text block
             for blk in content:
                 if isinstance(blk, dict) and blk.get("type") == "text":

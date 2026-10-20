@@ -151,7 +151,7 @@ Match is **strict whole-string** (case-insensitive, trims trailing punctuation).
 
 On Yes, the proxy replays the **original** held request byte-identically (with the original headers, including auth) — not the word `yes` itself.
 
-**One reply releases exactly one held request.** A reply counts only when it is the newest item in the request. In an agent's tool loop, your `yes` stays in the history while tool calls and tool results are added after it; those later requests are not new replies, so any of them that crosses a threshold is held and needs its own `yes`. A reply that was already used is also not a new answer: if the client re-sends the identical request (a retry), the guard re-prompts instead of releasing another held request. The audit log records this as `stale_reply`.
+**One reply releases exactly one held request.** A reply counts only when it is the newest item in the request. In an agent's tool loop, your `yes` stays in the history while tool calls and tool results are added after it; those later requests are not new replies, so any of them that crosses a threshold is held and needs its own `yes`. Some clients, Claude Code among them, add the reply you type after a block to the user message that carries the latest tool result; the guard reads the text typed after the last tool result as your reply. Tool output is never read as a reply. A reply that was already used is also not a new answer: if the client re-sends the identical request (a retry), the guard re-prompts instead of releasing another held request. The audit log records this as `stale_reply`.
 
 ### Programmatic (`[TIP: ...]` directive)
 
