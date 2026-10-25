@@ -40,7 +40,26 @@ refresh, even with 1,000 unrelated entries, and at most two known-path removals
 on a session transition. The existing display tests pass except the loopback
 server test, which cannot bind a socket inside this sandbox (PermissionError).
 
+## Idle scheduling
+
+Unchanged inputs trigger a full refresh every 30 seconds. Every 2 seconds the
+worker checks bounded session-marker content and metadata for a fixed set of
+paths: the launch directory, marker, settings/title, local monitor database and
+WAL, user configuration, pending-update marker and exact native transcript.
+Changed metadata resumes refresh at the next 2 second poll. There is no history
+search, database query or transcript parse in this poll. Proxy-only changes
+without a local signal are discovered on the next 30 second refresh.
+
+Cache expiry remains 10 seconds after the observation; idle snapshots can show
+stale rather than misrepresenting an older observation as current. Creating the
+status subdirectory may cause one extra initial refresh. Changes arriving during
+a refresh remain visible at the next poll.
+
+The four virtual-clock/metadata tests in `test_status_worker_idle.py` fail on
+the preceding commit and pass after this change. A 95 second unchanged session
+does four refreshes instead of 48; a change at second 7 refreshes by second 9;
+repeated observation failures also wait 30 seconds.
+
 ## Validation in progress
 
-Idle scheduling, lifetime checks and full base/candidate suite parity are
-recorded in the next two behavior commits.
+Lifetime checks and full base/candidate suite parity follow in the final commit.

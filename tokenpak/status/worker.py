@@ -5,17 +5,66 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import signal
 import tempfile
 import time
 from pathlib import Path
 
-from tokenpak.core.runtime.update_pending import cached_detect
+from tokenpak.core.runtime.update_pending import cached_detect, marker_path
 from tokenpak.status.binding import current_session, run_dir
 from tokenpak.status.display import WIDTHS, render
 from tokenpak.status.snapshot import MAX_AGE, fetch_snapshot
 
 _last_written: tuple[Path, str] | None = None
+POLL_SECONDS = 2.0
+IDLE_REFRESH_SECONDS = 30.0
+
+
+def _file_stamp(path: Path) -> tuple[int, int, int, int] | None:
+    try:
+        info = path.stat()
+        return info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns
+    except OSError:
+        return None
+
+
+class InputWatch:
+    """Watch a fixed set of metadata paths; never enumerate native history.
+
+    Remote/proxy-only changes are picked up by the periodic refresh. Local
+    ledger, configuration and session changes wake the writer on the next poll.
+    """
+
+    def __init__(self, directory: Path) -> None:
+        from tokenpak import _paths
+
+        self.directory = directory
+        home = _paths.home()
+        database = _paths.monitor_db(mode="read") or home / "monitor.db"
+        self.paths = (
+            directory,
+            directory / "current-session",
+            directory / "settings.json",
+            directory / "session_title.json",
+            database,
+            Path(str(database) + "-wal"),
+            home / "config.json",
+            home / "config.yaml",
+            marker_path(),
+        )
+        # Claude's ordinary project transcript has an exact session filename.
+        # If that layout is absent (e.g. another client), do not search history
+        # or accidentally bind this launch to somebody else's latest session.
+        config = Path(os.environ.get("CLAUDE_CONFIG_DIR") or Path.home() / ".claude")
+        project = re.sub(r"[^A-Za-z0-9-]", "-", str(Path.cwd()))
+        self.transcripts = config / "projects" / project
+
+    def stamp(self) -> tuple:
+        """Return bounded metadata plus the validated, bounded session marker."""
+        session = current_session()
+        paths = self.paths + ((self.transcripts / f"{session}.jsonl",) if session else ())
+        return session, tuple(_file_stamp(path) for path in paths)
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -80,12 +129,21 @@ def main() -> int:
     directory = run_dir()
     proxy = os.environ.get("TOKENPAK_FORECAST_PROXY", "http://127.0.0.1:8766")
     routing = os.environ.get("TOKENPAK_FORECAST_ROUTING", "unknown")
+    watch = InputWatch(directory)
+    previous = None
+    next_refresh = 0.0
     while active and os.getppid() == parent and parent != 1:
         try:
-            refresh(directory, proxy, routing)
+            stamp = watch.stamp()
+            if stamp != previous or time.monotonic() >= next_refresh:
+                # Set the deadline even on failure. Failed observations keep
+                # their original expiry; sleeping never makes old data fresh.
+                next_refresh = time.monotonic() + IDLE_REFRESH_SECONDS
+                previous = stamp
+                refresh(directory, proxy, routing)
         except (OSError, ValueError, TypeError):
             pass  # Readers label expired caches stale; never keep a failed writer's value live.
-        for _ in range(20):
+        for _ in range(round(POLL_SECONDS / 0.1)):
             if not active or os.getppid() != parent:
                 break
             time.sleep(0.1)
