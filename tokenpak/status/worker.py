@@ -11,9 +11,11 @@ import time
 from pathlib import Path
 
 from tokenpak.core.runtime.update_pending import cached_detect
-from tokenpak.status.binding import current_session, run_dir, valid_session
+from tokenpak.status.binding import current_session, run_dir
 from tokenpak.status.display import WIDTHS, render
 from tokenpak.status.snapshot import MAX_AGE, fetch_snapshot
+
+_last_written: tuple[Path, str] | None = None
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -41,6 +43,7 @@ def pending_version() -> str:
 
 
 def refresh(directory: Path, proxy: str, routing_mode: str) -> None:
+    global _last_written
     session = current_session()
     if not session:
         return
@@ -53,11 +56,15 @@ def refresh(directory: Path, proxy: str, routing_mode: str) -> None:
     content += "".join(f"{width}|{render(snapshot, width, pending)}\n" for width in WIDTHS)
     atomic_write(cache / f"{session}.line", content)
     atomic_write(cache / f"{session}.json", json.dumps(snapshot.to_dict(), sort_keys=True))
-    # /clear can bind a new native session. Keep only this launch's current
-    # disposable cache; never touch ledger or journal history.
-    for old in cache.iterdir():
-        if old.suffix in {".line", ".json"} and valid_session(old.stem) and old.stem != session:
-            old.unlink(missing_ok=True)
+    # /clear replaces only the pair this writer last produced. Never enumerate
+    # the run directory: unrelated entries must not make every tick more work.
+    # Files from an earlier writer remain expired and can be cleaned at launch
+    # disposal; they are not this process's ownership to infer from filenames.
+    previous = _last_written
+    _last_written = (directory, session)
+    if previous and previous[0] == directory and previous[1] != session:
+        for suffix in (".line", ".json"):
+            (cache / f"{previous[1]}{suffix}").unlink(missing_ok=True)
 
 
 def main() -> int:
