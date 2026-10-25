@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import signal
@@ -19,6 +20,8 @@ from tokenpak.status.snapshot import MAX_AGE, fetch_snapshot
 _last_written: tuple[Path, str] | None = None
 POLL_SECONDS = 2.0
 IDLE_REFRESH_SECONDS = 30.0
+SESSION_IDLE_SECONDS = 60 * 60
+logger = logging.getLogger(__name__)
 
 
 def _file_stamp(path: Path) -> tuple[int, int, int, int] | None:
@@ -41,17 +44,20 @@ class InputWatch:
 
         self.directory = directory
         home = _paths.home()
-        database = _paths.monitor_db(mode="read") or home / "monitor.db"
+        # Use the canonical bounded candidate list, including files that do
+        # not exist yet. The diagnostic API counts database rows; a display
+        # watcher needs paths only, never a database connection.
+        databases = _paths._monitor_db_candidates()
         self.paths = (
             directory,
             directory / "current-session",
             directory / "settings.json",
             directory / "session_title.json",
-            database,
-            Path(str(database) + "-wal"),
             home / "config.json",
             home / "config.yaml",
             marker_path(),
+        ) + tuple(
+            path for database in databases for path in (database, Path(str(database) + "-wal"))
         )
         # Claude's ordinary project transcript has an exact session filename.
         # If that layout is absent (e.g. another client), do not search history
@@ -65,6 +71,49 @@ class InputWatch:
         session = current_session()
         paths = self.paths + ((self.transcripts / f"{session}.jsonl",) if session else ())
         return session, tuple(_file_stamp(path) for path in paths)
+
+
+class SessionLifetime:
+    """End abandoned writers using only this launch's activity, never output.
+
+    A transcript must have been observed before its disappearance ends a
+    session: hooks may bind an identity before the client creates the file.
+    Clients without this native layout still have the run-directory idle fence.
+    """
+
+    def __init__(self, directory: Path, transcripts: Path) -> None:
+        self.directory = directory
+        self.transcripts = transcripts
+        self.session = ""
+        self.seen_transcript = False
+        self.previous: tuple | None = None
+        self.last_activity = time.monotonic()
+
+    def alive(self) -> bool:
+        """Check deletion and one-hour inactivity without reading file bodies."""
+        directory = _file_stamp(self.directory)
+        if directory is None:
+            return False
+        session = current_session()
+        marker = _file_stamp(self.directory / "current-session")
+        if self.session and not session and marker is None:
+            return False
+        transcript = _file_stamp(self.transcripts / f"{session}.jsonl") if session else None
+        now = time.monotonic()
+        if session != self.session:
+            self.session = session
+            self.seen_transcript = False
+        if transcript is None and self.seen_transcript:
+            return False
+        self.seen_transcript = transcript is not None
+        signature = (session, directory, marker, transcript)
+        if self.previous is None:
+            newest = max(info[3] / 1e9 for info in (directory, marker, transcript) if info)
+            self.last_activity = now - max(0.0, time.time() - newest)
+        elif signature != self.previous:
+            self.last_activity = now
+        self.previous = signature
+        return now - self.last_activity < SESSION_IDLE_SECONDS
 
 
 def atomic_write(path: Path, text: str) -> None:
@@ -130,19 +179,29 @@ def main() -> int:
     proxy = os.environ.get("TOKENPAK_FORECAST_PROXY", "http://127.0.0.1:8766")
     routing = os.environ.get("TOKENPAK_FORECAST_ROUTING", "unknown")
     watch = InputWatch(directory)
+    lifetime = SessionLifetime(directory, watch.transcripts)
     previous = None
     next_refresh = 0.0
+    retrying = False
     while active and os.getppid() == parent and parent != 1:
         try:
+            if not lifetime.alive():
+                break
             stamp = watch.stamp()
-            if stamp != previous or time.monotonic() >= next_refresh:
+            if time.monotonic() >= next_refresh or (stamp != previous and not retrying):
                 # Set the deadline even on failure. Failed observations keep
                 # their original expiry; sleeping never makes old data fresh.
                 next_refresh = time.monotonic() + IDLE_REFRESH_SECONDS
                 previous = stamp
                 refresh(directory, proxy, routing)
-        except (OSError, ValueError, TypeError):
-            pass  # Readers label expired caches stale; never keep a failed writer's value live.
+                retrying = False
+        except Exception as exc:
+            # This process is a disposable display boundary. Never let an
+            # unexpected observation error create a busy retry loop, and never
+            # include remote response text or local paths in its diagnostic.
+            retrying = True
+            next_refresh = time.monotonic() + IDLE_REFRESH_SECONDS
+            logger.warning("Status observation failed (%s); retry deferred", type(exc).__name__)
         for _ in range(round(POLL_SECONDS / 0.1)):
             if not active or os.getppid() != parent:
                 break

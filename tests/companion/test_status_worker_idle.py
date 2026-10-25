@@ -19,12 +19,21 @@ def run_clock(monkeypatch, tmp_path, *, end=95, change_at=None, fail=False):
 
     class Watch:
         def __init__(self, directory):
-            pass
+            self.transcripts = directory
 
         def stamp(self):
             return ("session-one", int(change_at is not None and clock[0] >= change_at))
 
     monkeypatch.setattr(worker, "InputWatch", Watch, raising=False)
+
+    class Lifetime:
+        def __init__(self, *args):
+            pass
+
+        def alive(self):
+            return True
+
+    monkeypatch.setattr(worker, "SessionLifetime", Lifetime, raising=False)
 
     def refresh(*args):
         calls.append(round(clock[0], 3))
@@ -76,3 +85,55 @@ def test_watch_uses_metadata_without_reading_transcript_or_corpus(tmp_path, monk
     monkeypatch.setattr(Path, "glob", reject)
     monkeypatch.setattr(Path, "rglob", reject)
     watch.stamp()
+
+
+def test_watch_detects_new_override_database_without_opening_it(tmp_path, monkeypatch):
+    import sqlite3
+
+    monkeypatch.setenv(binding.ENV, str(tmp_path))
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path / "state"))
+    database = tmp_path / "custom.db"
+    monkeypatch.setenv("TOKENPAK_DB", str(database))
+
+    def reject(*a, **kw):
+        raise AssertionError("metadata watch must not open databases")
+
+    monkeypatch.setattr(sqlite3, "connect", reject)
+    watch = worker.InputWatch(tmp_path)
+    first = watch.stamp()
+    database.touch()
+    assert watch.stamp() != first
+
+
+def test_large_transcript_and_corpus_only_cost_fixed_metadata_work(tmp_path, monkeypatch):
+    monkeypatch.setenv(binding.ENV, str(tmp_path))
+    monkeypatch.setenv("TOKENPAK_HOME", str(tmp_path / "state"))
+    monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(tmp_path / "claude"))
+    database = tmp_path / "economics.db"
+    monkeypatch.setenv("TOKENPAK_DB", str(database))
+    binding.write_session("session-one")
+    watch = worker.InputWatch(tmp_path)
+    transcript = watch.transcripts / "session-one.jsonl"
+    transcript.parent.mkdir(parents=True)
+    for path in (database, transcript):
+        with path.open("wb") as handle:
+            handle.truncate(1024 * 1024 * 1024)
+    original = Path.open
+    stamps = []
+    original_stamp = worker._file_stamp
+
+    def guarded(path, *a, **kw):
+        assert path not in (database, transcript)
+        return original(path, *a, **kw)
+
+    def counted(path):
+        stamps.append(path)
+        return original_stamp(path)
+
+    monkeypatch.setattr(Path, "open", guarded)
+    monkeypatch.setattr(worker, "_file_stamp", counted)
+    first = watch.stamp()
+    per_poll = len(stamps)
+    assert per_poll <= 16
+    assert watch.stamp() == first
+    assert len(stamps) == 2 * per_poll
