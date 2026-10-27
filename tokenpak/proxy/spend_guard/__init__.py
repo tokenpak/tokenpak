@@ -182,9 +182,9 @@ def evaluate(
     model: str,
     session_id: str,
     headers: dict[str, Any] | None = None,
+    target_url: str = "",
     *,
     config: Any = None,
-    target_url: str = "",
 ) -> "GuardOutcome":
     """Top-level guard entry point.
 

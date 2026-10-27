@@ -1827,7 +1827,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     _sg_model,
                     _sg_session,
                     dict(self.headers),
-                    target_url=self.path,
+                    self.path,
                     **(
                         {"config": self._guard_accounting.preflight_config}
                         if _durable_guard
