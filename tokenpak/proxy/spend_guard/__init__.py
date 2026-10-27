@@ -184,6 +184,7 @@ def evaluate(
     headers: dict[str, Any] | None = None,
     *,
     config: Any = None,
+    target_url: str = "",
 ) -> "GuardOutcome":
     """Top-level guard entry point.
 
@@ -194,6 +195,29 @@ def evaluate(
     """
     if config is not None and getattr(config, "enabled", True) is False:
         return GuardOutcome.passthrough(body)
+
+    def failure(outcome: GuardOutcome) -> GuardOutcome:
+        from .policy import load_config
+        from .unattended import ERROR, finalize_block, requested
+
+        if requested(headers or {}):
+            try:
+                return finalize_block(outcome, config or load_config(), session_id)
+            except Exception:
+                # A broken event/config path must not escape this fail-closed
+                # boundary into the proxy's legacy exception handling.
+                payload = json.loads(outcome.response_body)
+                payload["error"].update(
+                    type=ERROR,
+                    message="Spend Guard stopped this unattended request. Report this error and stop.",
+                    in_band_approval_allowed=False,
+                    retryable=False,
+                    recovery_status="operator_action_required",
+                    escalation_recorded=False,
+                    escalation_error="audit_store_unavailable",
+                )
+                outcome.response_body = json.dumps(payload).encode()
+        return outcome
 
     # Lazy import — ``orchestrator`` pulls in pending/intent/replay/audit
     # which are heavier than estimator/policy alone.
@@ -206,7 +230,9 @@ def evaluate(
         try:
             from .orchestrator import evaluate as _evaluate
 
-            return _evaluate(body, model, session_id, headers or {}, config=config)
+            return _evaluate(
+                body, model, session_id, headers or {}, config=config, target_url=target_url
+            )
         except Exception as exc:
             if not _is_transient_lock_error(exc):
                 _log.warning(
@@ -214,7 +240,7 @@ def evaluate(
                     type(exc).__name__,
                     exc,
                 )
-                return _fail_closed_outcome(exc)
+                return failure(_fail_closed_outcome(exc))
             last_lock_exc = exc
             if backoff is not None:
                 _log.warning(
@@ -231,4 +257,4 @@ def evaluate(
         len(_LOCK_RETRY_BACKOFF_SEC) + 1,
         last_lock_exc,
     )
-    return _state_busy_outcome(last_lock_exc, retries=len(_LOCK_RETRY_BACKOFF_SEC))
+    return failure(_state_busy_outcome(last_lock_exc, retries=len(_LOCK_RETRY_BACKOFF_SEC)))

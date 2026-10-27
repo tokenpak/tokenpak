@@ -1,5 +1,25 @@
 # TIP Spend Guard — User Guide
 
+## Unattended sessions (opt-in)
+
+Start a TokenPak-routed client with `TOKENPAK_SPEND_GUARD_UNATTENDED=1` to
+receive a terminal, reportable block instead of a yes/no prompt. For example:
+
+```sh
+TOKENPAK_SPEND_GUARD_UNATTENDED=1 tokenpak codex
+```
+
+The error includes the original reason, token and cost estimates, and the
+held request's `pending_id`. Report it and stop. An operator on the proxy host
+can run `tokenpak spend-guard approve <pending_id>` to permit one identical
+retry before expiry; that command sends no provider request. Interactive
+sessions retain the yes/no flow. Hard ceilings remain unbypassable.
+
+Adapters consume content-free events through `tokenpak spend-guard events
+--after <event_id> --json`. The [proposed unattended contract](proposals/spend-guard-unattended.md)
+defines the error, event cursor, approval boundaries, and adapter follow-up.
+No orchestrator adapter is installed by this change.
+
 The **TIP Spend Guard** is TokenPak's proxy-side circuit breaker. It blocks risky requests *before* they reach the upstream LLM provider — preventing runaway tool loops, accidental large prompts, and the death-by-1000-cuts pattern that killed two real-world sessions in early May 2026 ($101 and $99 in 88 minutes each, on what looked like normal coding traffic).
 
 This is the canonical defense; the older companion-side **advisory budget** is fail-open and stays as a soft hint.
