@@ -27,9 +27,9 @@ def test_xhigh_request_observation_preserves_exact_label_and_wire_bytes(body):
         "anthropic", {"input_tokens": 2, "output_tokens": 3}, wire
     )
     assert wire == before
-    assert observation["reasoning_effort"] == ""
+    assert observation["reasoning_effort"] == "xhigh"
     assert observation["reasoning_effort_raw"] == "xhigh"
-    assert observation["reasoning_effort_source"] == "request_body_unrecognized"
+    assert observation["reasoning_effort_source"] == "request_body"
     assert _reasoning_effort_cell(
         observation["reasoning_effort"],
         observation["reasoning_effort_raw"],

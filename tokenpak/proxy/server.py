@@ -22,6 +22,8 @@ See tokenpak/proxy/route_policy.py for the per-route behavior matrix.
 
 from __future__ import annotations
 
+from tokenpak.core.reasoning import REASONING_EFFORTS
+
 __all__ = (
     "CLAUDE_CODE_HEADER_ALLOWLIST",
     "CacheMetrics",
@@ -822,6 +824,15 @@ class _ThreadedHTTPServer(HTTPServer):
             self.shutdown_request(accepted_socket)
             raise
 
+    def handle_error(self, request: object, client_address: object) -> None:
+        # A client that hung up before its response was written (a status
+        # line past its timeout, an interrupted stream) is routine. Printing
+        # a traceback for each one costs CPU and serialises request threads
+        # on stderr exactly when the proxy is busiest.
+        if _is_client_disconnect_error(sys.exc_info()[1] or Exception()):
+            return
+        super().handle_error(request, client_address)
+
     def _handle(
         self,
         request: socket.socket,
@@ -1153,11 +1164,26 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     # HTTP verbs
     # ------------------------------------------------------------------
 
+    def _read_work_tag(self) -> None:
+        from tokenpak.core.work_tag import extract_job_path, work_tag_from_headers
+
+        self.path, path_tag = extract_job_path(self.path)
+        self._tokenpak_work_tag = path_tag or work_tag_from_headers(self.headers)
+
     def do_GET(self) -> None:
         if not self._enforce_proxy_auth():
             return
+        self._read_work_tag()
         ps = self._ps
         path = self.path
+        if path.split("?", 1)[0] == "/stats/usage":
+            from tokenpak._paths import monitor_db
+            from tokenpak.proxy.job_usage import handle_usage
+
+            handle_usage(
+                self, ps.monitor.db_path if ps.monitor is not None else monitor_db(mode="read")
+            )
+            return
 
         # App-level /tpk/v1/* endpoints — proxy-owned resources (vault, budget,
         # journal, …) exposed over REST so the companion + external tools can
@@ -1421,6 +1447,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
     def do_POST(self) -> None:
         if not self._enforce_proxy_auth():
             return
+        self._read_work_tag()
         ps = self._ps
 
         # App-level /tpk/v1/* POST endpoints — reserved for future compress,
@@ -2049,7 +2076,8 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             if ps.compilation_mode != "transparent":
                 try:
                     from tokenpak.proxy.cache_invalidator import (
-                        _detect_cache_invalidators,
+                        _body_signature,
+                        _diff_signatures,
                         _get_session_cache,
                         _write_cache_invalidator_events,
                     )
@@ -2058,14 +2086,17 @@ class _ProxyHandler(BaseHTTPRequestHandler):
 
                     _ci_session_id = _resolve_session_id(self.headers, model)
                     _ci_cache = _get_session_cache()
-                    _ci_prev_body = _ci_cache.get(_ci_session_id)
-                    if _ci_prev_body is not None:
-                        _ci_events = _detect_cache_invalidators(_ci_prev_body, body)
+                    # Parse this body once; the cache keeps the previous
+                    # request's signature, never its raw body.
+                    _ci_prev_sig = _ci_cache.get(_ci_session_id)
+                    _ci_sig = _body_signature(body)
+                    if _ci_prev_sig is not None and _ci_sig is not None:
+                        _ci_events = _diff_signatures(_ci_prev_sig, _ci_sig)
                         if _ci_events:
                             _write_cache_invalidator_events(
                                 _CI_DB, None, _ci_session_id, _ci_events
                             )
-                    _ci_cache.put(_ci_session_id, body)
+                    _ci_cache.put(_ci_session_id, _ci_sig)
                 except Exception:
                     pass  # fail-open: never break a request over telemetry
 
@@ -2546,6 +2577,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             _event_transform_applied = False
 
             output_tokens = 0
+            from tokenpak.proxy.job_usage import observed_model
+
+            served_model = ""
             provider_usage_object: Mapping[str, object] | None = None
             _guard_response_complete = not is_streaming
 
@@ -2746,6 +2780,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         except Exception:
                             sse_observation_buffer = b""
                     sse_usage = extract_sse_tokens(sse_observation_buffer)
+                    served_model = observed_model(sse_observation_buffer, streaming=True)
                     provider_usage_object = _extract_sse_usage(sse_observation_buffer)
                     _guard_response_complete = (
                         _guard_response_complete
@@ -2915,6 +2950,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         except Exception:
                             pass
                     output_tokens = _extract_response_tokens(body_for_metrics)
+                    served_model = observed_model(body_for_metrics)
                     provider_usage_object = _extract_response_usage(body_for_metrics)
                     # stop_reason from the response JSON copy (read-only -
                     # the client already received the original bytes above).
@@ -3135,6 +3171,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     try:
                         ps.monitor.log(
                             model=model,
+                            served_model=served_model,
                             input_tokens=(
                                 _cost_observed["input_tokens"]
                                 if self._guard_accounting.ref
@@ -3182,6 +3219,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                             user_id=getattr(self, "_tokenpak_user_id", "") or "",
                             session_id=_mon_session_id,
                             agent_id=_mon_agent_id,
+                            work_tag=getattr(self, "_tokenpak_work_tag", ""),
                             cycle_id=_mon_cycle_id,
                             attribution_source=_mon_attribution_source,
                             stop_reason=stop_reason,
@@ -3876,14 +3914,39 @@ class _ProxyHandler(BaseHTTPRequestHandler):
             # Proxy-owned default: latest completed non-empty ledger session.
             session_id, selection_note = resolve_default_session_id(db_path)
 
+        from tokenpak.proxy.economics_gate import (
+            EconomicsBusy,
+            client_disconnected,
+            get_economics_gate,
+        )
+
+        if client_disconnected(self.connection):
+            return  # the poller gave up; nobody is waiting for this answer
         try:
-            economics = _build_session_economics_response(
-                session_id,
-                db_path,
-                model_hint=model_hint,
-                now=frozen_now,
+            # Bounded and single-flight: status lines poll this every ~2 s and
+            # give up after 0.5 s, so unbounded evaluations pile up threads.
+            economics = get_economics_gate().run(
+                (session_id, model_hint, now_field, str(db_path)),
+                lambda: _build_session_economics_response(
+                    session_id,
+                    db_path,
+                    model_hint=model_hint,
+                    now=frozen_now,
+                ),
             )
             response_body = economics.to_json().encode()
+        except EconomicsBusy:
+            busy = json.dumps(
+                {"error": {"type": "overloaded_error", "message": "Session economics is busy"}},
+                separators=(",", ":"),
+            ).encode()
+            self.send_response(503)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(busy)))
+            self.send_header("Retry-After", "2")
+            self.end_headers()
+            self.wfile.write(busy)
+            return
         except Exception:
             logger.exception("session-economics local ledger evaluation failed")
             _send_err(
@@ -4135,6 +4198,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         db_path = monitor.db_path if monitor is not None else str(_paths.under("monitor.db"))
 
         sessions: list[dict[str, object]] = []
+        conn = None
         try:
             conn = _sqlite3.connect(str(db_path), timeout=3.0)
             conn.row_factory = _sqlite3.Row
@@ -4186,11 +4250,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                         "platform": row["platform"] or "unknown",
                     }
                 )
-            conn.close()
         except Exception as exc:
             import logging as _logging
 
             _logging.getLogger(__name__).warning("metrics/dashboard sessions query failed: %s", exc)
+        finally:
+            if conn is not None:
+                conn.close()
 
         # Last-24h original-vs-compressed totals for the compression chart.
         # Reuses Monitor.get_stats(), the same real-data path `tokenpak status`
@@ -4380,10 +4446,8 @@ def _extract_response_tokens(body: bytes) -> int:
 def _extract_request_reasoning_effort(body: bytes | None) -> tuple[str, str]:
     """Return normalized and raw request-observed reasoning effort.
 
-    The governed reasoning-usage schema currently admits only
-    low/medium/high. Newer client values remain available in the raw field so
-    the schema can be reconciled explicitly instead of silently discarding or
-    widening the normalized contract.
+    Known client labels retain their exact meaning. Future labels remain in
+    the raw field with explicit unrecognized provenance.
 
     A missing or empty request body (for example a zero-length-body POST to
     a model endpoint) carries no reasoning-effort signal and is treated the
@@ -4407,7 +4471,7 @@ def _extract_request_reasoning_effort(body: bytes | None) -> tuple[str, str]:
                 continue
             raw = value.strip()
             if raw:
-                return (raw if raw in {"low", "medium", "high"} else "", raw)
+                return (raw if raw in REASONING_EFFORTS else "", raw)
         return "", ""
     except (json.JSONDecodeError, UnicodeDecodeError):
         return "", ""
@@ -4456,7 +4520,7 @@ def _provider_usage_observation(
     raw_provider_effort = record.get("reasoning_effort")
     provider_effort = (
         raw_provider_effort
-        if isinstance(raw_provider_effort, str) and raw_provider_effort in {"low", "medium", "high"}
+        if isinstance(raw_provider_effort, str) and raw_provider_effort in REASONING_EFFORTS
         else None
     )
     provider_effort_raw = usage.get("reasoning_effort") if usage is not None else None

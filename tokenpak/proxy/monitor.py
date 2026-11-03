@@ -119,6 +119,7 @@ _DB_DROPPED_ROWS_LOCK = threading.Lock()
 _REQUEST_INSERT_COLUMNS = (
     "timestamp",
     "model",
+    "served_model",
     "request_type",
     "input_tokens",
     "output_tokens",
@@ -141,6 +142,7 @@ _REQUEST_INSERT_COLUMNS = (
     "ttl_attribution",
     "session_id",
     "agent_id",
+    "work_tag",
     "cycle_id",
     "attribution_source",
     "stop_reason",
@@ -566,6 +568,7 @@ class Monitor:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 timestamp TEXT NOT NULL,
                 model TEXT NOT NULL,
+                served_model TEXT DEFAULT '',
                 request_type TEXT,
                 input_tokens INTEGER,
                 output_tokens INTEGER,
@@ -588,6 +591,7 @@ class Monitor:
                 ttl_attribution TEXT DEFAULT NULL,
                 session_id TEXT DEFAULT '',
                 agent_id TEXT DEFAULT '',
+                work_tag TEXT DEFAULT '',
                 cycle_id TEXT DEFAULT '',
                 attribution_source TEXT DEFAULT '',
                 reasoning_tokens INTEGER DEFAULT NULL,
@@ -766,6 +770,8 @@ class Monitor:
                     "ALTER TABLE requests ADD COLUMN event_transform_applied INTEGER DEFAULT 0",
                 ),
                 ("agent_id", "ALTER TABLE requests ADD COLUMN agent_id TEXT DEFAULT ''"),
+                ("served_model", "ALTER TABLE requests ADD COLUMN served_model TEXT DEFAULT ''"),
+                ("work_tag", "ALTER TABLE requests ADD COLUMN work_tag TEXT DEFAULT ''"),
                 ("cycle_id", "ALTER TABLE requests ADD COLUMN cycle_id TEXT DEFAULT ''"),
                 (
                     "attribution_source",
@@ -913,7 +919,12 @@ class Monitor:
         guard_usage_complete: bool = False,
         guard_price_json: str | None = None,
         guard_token_usage_complete: bool = False,
+        work_tag: str = "",
+        served_model: str = "",
     ) -> None:
+        from tokenpak.core.work_tag import validate_work_tag
+
+        work_tag = validate_work_tag(work_tag)
         if type(guard_token_usage_complete) is not bool:
             raise ValueError("guard_token_usage_complete must be a boolean")
         if guard_token_usage_complete and (
@@ -949,6 +960,7 @@ class Monitor:
         insert_params = (
             datetime.now().isoformat(),
             model,
+            served_model or "",
             "chat",
             input_tokens,
             output_tokens,
@@ -971,6 +983,7 @@ class Monitor:
             ttl_attribution,
             session_id or "",
             agent_id or "",
+            work_tag,
             cycle_id or "",
             attribution_source or "",
             stop_reason or "",

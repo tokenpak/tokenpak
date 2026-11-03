@@ -331,7 +331,7 @@ def test_unsupported_explicit_effort_never_joins_missing_effort_cell(tmp_path: P
         )
         conn.execute(
             "UPDATE requests SET reasoning_effort_source = 'request_body_unrecognized', "
-            "reasoning_effort_raw = 'ultra' WHERE provider_usage_ref = 'turn-2'"
+            "reasoning_effort_raw = 'hyper' WHERE provider_usage_ref = 'turn-2'"
         )
         # turn-3 has genuinely absent normalized/raw/source values.
         conn.commit()

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import os
 import sqlite3
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -169,7 +170,7 @@ class SessionFilter:
 
         where_sql, args = self._build_where(params)
 
-        with sqlite3.connect(str(self._db_path)) as conn:
+        with closing(sqlite3.connect(str(self._db_path))) as conn, conn:
             conn.row_factory = sqlite3.Row
             total = self._count(conn, where_sql, args)
             rows = self._fetch(conn, where_sql, args, params.limit, params.offset)
@@ -185,7 +186,7 @@ class SessionFilter:
         """Return sorted list of distinct model names in the DB."""
         if not self._db_path.exists():
             return []
-        with sqlite3.connect(str(self._db_path)) as conn:
+        with closing(sqlite3.connect(str(self._db_path))) as conn, conn:
             cur = conn.execute(
                 "SELECT DISTINCT model FROM requests WHERE model IS NOT NULL ORDER BY model"
             )

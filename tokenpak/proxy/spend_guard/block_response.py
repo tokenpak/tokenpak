@@ -90,6 +90,9 @@ def block(decision: PreflightDecision, pending: PendingRequest) -> bytes:
             "approval_prompt": "Proceed? Yes / No",
             "retryable": True,  # client may retry after approval
             "recovery_status": "user_action_required",
+            "session_id": pending.session_id,
+            "automatic_retry_allowed": False,
+            "headless_action": "stop_and_report",
         }
     }
     return json.dumps(payload).encode()
@@ -204,6 +207,9 @@ def pending_waiting(pending: PendingRequest) -> bytes:
             "projected_tokens": pending.projected_tokens,
             "retryable": True,
             "recovery_status": "user_action_required",
+            "session_id": pending.session_id,
+            "automatic_retry_allowed": False,
+            "headless_action": "stop_and_report",
         }
     }
     return json.dumps(payload).encode()
@@ -232,6 +238,9 @@ def reprompt(pending: PendingRequest) -> bytes:
             "approval_prompt": "Proceed? Yes / No",
             "retryable": True,
             "recovery_status": "user_action_required",
+            "session_id": pending.session_id,
+            "automatic_retry_allowed": False,
+            "headless_action": "stop_and_report",
         }
     }
     return json.dumps(payload).encode()

@@ -21,7 +21,7 @@ Reference fields observed in OpenAI responses as of 2026-05:
         }
     }
 
-``reasoning_effort`` is set by the caller (low/medium/high). The
+``reasoning_effort`` is set by the caller using a supported client label. The
 provider does not echo it in the usage block as of this writing; if a
 future API version starts echoing it, this parser will surface it.
 """
@@ -32,6 +32,7 @@ import hashlib
 import json
 from collections.abc import Mapping
 
+from tokenpak.core.reasoning import REASONING_EFFORTS
 from tokenpak.services.providers._registry import register_parser
 
 PROVIDER_NAME = "openai"
@@ -100,8 +101,7 @@ def parse_usage(usage: Mapping[str, object] | None) -> dict[str, object]:
     raw_reasoning_effort = usage.get("reasoning_effort")
     reasoning_effort = (
         raw_reasoning_effort
-        if isinstance(raw_reasoning_effort, str)
-        and raw_reasoning_effort in {"low", "medium", "high"}
+        if isinstance(raw_reasoning_effort, str) and raw_reasoning_effort in REASONING_EFFORTS
         else None
     )
 

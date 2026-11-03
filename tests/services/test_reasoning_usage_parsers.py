@@ -166,7 +166,7 @@ def test_openai_unrecognized_effort_stays_null_in_normalized_contract():
             "input_tokens": 10,
             "output_tokens": 5,
             "total_tokens": 15,
-            "reasoning_effort": "ultra",
+            "reasoning_effort": "future-effort",
         }
     )
     assert result["reasoning_effort"] is None
