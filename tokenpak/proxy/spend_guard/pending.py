@@ -158,6 +158,33 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_hash ON pending_requests(request_hash, status)"
     )
+    # ``answered_by`` records the reply that released or discarded a held
+    # request, so the same reply cannot answer a second one.
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(pending_requests)")}
+    for name, definition in (
+        ("unattended", "INTEGER NOT NULL DEFAULT 0"),
+        ("operator_approved", "INTEGER NOT NULL DEFAULT 0"),
+        ("block_metadata", "TEXT NOT NULL DEFAULT '{}'"),
+    ):
+        if name not in columns:
+            try:
+                conn.execute(f"ALTER TABLE pending_requests ADD COLUMN {name} {definition}")
+            except sqlite3.OperationalError as exc:
+                if "duplicate column" not in str(exc).lower():
+                    raise
+    if "answered_by" not in columns:
+        try:
+            conn.execute(
+                "ALTER TABLE pending_requests ADD COLUMN answered_by TEXT NOT NULL DEFAULT ''"
+            )
+        except sqlite3.OperationalError as exc:
+            # Another process added it between the check and the ALTER.
+            if "duplicate column" not in str(exc).lower():
+                raise
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_pending_answered "
+        "ON pending_requests(session_id, answered_by)"
+    )
     # One-time migration: redact credential headers from any rows written by
     # an older build that persisted raw headers (raw credential-on-disk
     # exposure). Gated by PRAGMA user_version so it runs exactly once per db;
@@ -227,6 +254,8 @@ class PendingStore:
         projected_tokens: int,
         projected_cost_usd: float,
         ttl_seconds: int = 600,
+        unattended: bool = False,
+        block_metadata: Optional[dict] = None,
     ) -> PendingRequest:
         """Insert a new pending request and return it."""
         if not session_id:
@@ -252,8 +281,8 @@ class PendingStore:
                        (pending_id, session_id, created_at, expires_at,
                         request_hash, provider, model, projected_tokens,
                         projected_cost_usd, raw_request_blob,
-                        raw_request_headers, target_url, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
+                        raw_request_headers, target_url, status, unattended, block_metadata)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)""",
                 (
                     pending_id,
                     session_id,
@@ -267,6 +296,8 @@ class PendingStore:
                     blob,
                     headers_json,
                     target_url,
+                    int(unattended),
+                    json.dumps(block_metadata or {}),
                 ),
             )
             conn.commit()
@@ -287,6 +318,8 @@ class PendingStore:
             raw_request_headers=safe_headers,
             target_url=target_url,
             status="pending",
+            unattended=unattended,
+            block_metadata=block_metadata or {},
         )
 
     # -- lookup ------------------------------------------------------------
@@ -346,8 +379,84 @@ class PendingStore:
             conn.close()
         return _row_to_pending(row) if row else None
 
+    def reply_seen(self, session_id: str, reply_hash: str) -> bool:
+        """Has this exact request already been held, or already answered one?
+
+        ``reply_hash`` is :func:`hash_request` of the replying request. A
+        match means the reply is a re-send — a client retry of a held
+        request, or of a reply that already released or discarded one —
+        rather than a new answer, so it must not resolve another hold.
+        """
+        if not session_id or not reply_hash:
+            return False
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            row = conn.execute(
+                """SELECT 1 FROM pending_requests
+                   WHERE session_id = ? AND (request_hash = ? OR answered_by = ?)
+                   LIMIT 1""",
+                (session_id, reply_hash, reply_hash),
+            ).fetchone()
+        finally:
+            conn.close()
+        return row is not None
+
     # -- consume / discard -------------------------------------------------
-    def consume(self, pending_id: str) -> Optional[PendingRequest]:
+    def mark_unattended(self, pending_id: str) -> None:
+        """An opt-in on an existing hold cannot be undone by a later header."""
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            conn.execute(
+                "UPDATE pending_requests SET unattended=1 WHERE pending_id=? AND status='pending'",
+                (pending_id,),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def approve_unattended(self, pending_id: str) -> bool:
+        """Arm one exact held request; only a local operator command calls this."""
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            cur = conn.execute(
+                "UPDATE pending_requests SET operator_approved=1 "
+                "WHERE pending_id=? AND unattended=1 AND operator_approved=0 "
+                "AND status='pending' AND expires_at>?",
+                (pending_id, time.time()),
+            )
+            conn.commit()
+            return cur.rowcount == 1
+        finally:
+            conn.close()
+
+    def consume_unattended(
+        self, pending_id: str, *, session_id: str, request_hash: str, target_url: str
+    ) -> Optional[PendingRequest]:
+        """Atomically redeem an operator approval on an identical retry only."""
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            cur = conn.execute(
+                "UPDATE pending_requests SET status='consumed', operator_approved=0 "
+                "WHERE pending_id=? AND session_id=? AND request_hash=? AND target_url=? "
+                "AND unattended=1 AND operator_approved=1 AND status='pending' "
+                "AND expires_at>?",
+                (pending_id, session_id, request_hash, target_url, time.time()),
+            )
+            conn.commit()
+            if cur.rowcount != 1:
+                return None
+            row = conn.execute(
+                "SELECT * FROM pending_requests WHERE pending_id=?", (pending_id,)
+            ).fetchone()
+            return _row_to_pending(row)
+        finally:
+            conn.close()
+
+    def consume(self, pending_id: str, *, answered_by: str = "") -> Optional[PendingRequest]:
         """Return the pending request and mark it consumed.
 
         Atomic: only succeeds once. The UPDATE is conditioned on
@@ -355,14 +464,16 @@ class PendingStore:
         callers exactly one wins the transition and gets the row back;
         the rest (and all subsequent calls) return None. This is what
         prevents a held request from being replayed to the provider twice.
+        ``answered_by`` records the approving reply's hash (see
+        :meth:`reply_seen`).
         """
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
             cur = conn.execute(
-                "UPDATE pending_requests SET status='consumed' "
-                "WHERE pending_id = ? AND status = 'pending'",
-                (pending_id,),
+                "UPDATE pending_requests SET status='consumed', answered_by = ? "
+                "WHERE pending_id = ? AND status = 'pending' AND unattended=0",
+                (answered_by, pending_id),
             )
             conn.commit()
             if cur.rowcount != 1:
@@ -375,14 +486,14 @@ class PendingStore:
             conn.close()
         return _row_to_pending(row) if row else None
 
-    def discard(self, pending_id: str) -> bool:
+    def discard(self, pending_id: str, *, answered_by: str = "") -> bool:
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
             cur = conn.execute(
-                "UPDATE pending_requests SET status='discarded' "
+                "UPDATE pending_requests SET status='discarded', answered_by = ? "
                 "WHERE pending_id = ? AND status = 'pending'",
-                (pending_id,),
+                (answered_by, pending_id),
             )
             conn.commit()
             return cur.rowcount > 0
@@ -420,4 +531,6 @@ def _row_to_pending(row: sqlite3.Row) -> PendingRequest:
         raw_request_headers=json.loads(row["raw_request_headers"] or "{}"),
         target_url=row["target_url"],
         status=row["status"],
+        unattended=bool(row["unattended"]),
+        block_metadata=json.loads(row["block_metadata"]),
     )

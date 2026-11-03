@@ -1,10 +1,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """Yes/No intent parser for spend guard approval flow.
 
-Used only when a session has a pending block. Looks at the LAST user-text
-segment of the new request body and matches it against curated positive /
-negative token sets. Failing closed: anything that isn't a clean match
-returns ``AMBIGUOUS`` and the user is re-prompted.
+Used only when a session has a pending block. Looks at the newest input
+item of the new request body and, when it is user text, matches it against
+curated positive / negative token sets. Failing closed: anything that isn't
+a clean match returns ``AMBIGUOUS`` and the user is re-prompted.
 """
 
 from __future__ import annotations
@@ -84,13 +84,55 @@ _NEGATIVE = frozenset(
 )
 
 
-def _last_user_text(body: bytes) -> str:
-    """Best-effort extract the trailing user-text segment.
+def _is_client_context(text: str) -> bool:
+    """A block the client adds around the operator's text, not typed by them."""
+    stripped = text.strip()
+    return stripped.startswith("<system-reminder>") and stripped.endswith("</system-reminder>")
 
-    For an Anthropic ``/v1/messages`` body, that's the last user message's
-    content — which for the approval flow is what the operator just typed.
-    For other shapes, returns the whole decoded body so trivial
-    one-word inputs still work.
+
+def _is_tool_result(block: object) -> bool:
+    return isinstance(block, dict) and str(block.get("type") or "").endswith("tool_result")
+
+
+def _typed_after_tool_result(content: list) -> str:
+    """The operator's text typed after the last tool result in ``content``.
+
+    Claude Code appends a reply typed after a 402 to the user message that
+    already carries the tool result (``[tool_result, text]``), and appends
+    each later reply to the same message. The reply is the last text block
+    with no tool result after it. Text inside a tool result is tool output
+    and is never read, and ``<system-reminder>`` blocks the client adds
+    around the typed text are skipped.
+    """
+    for block in reversed(content):
+        if not isinstance(block, dict):
+            continue
+        if _is_tool_result(block):
+            break
+        if block.get("type") == "text":
+            text = str(block.get("text") or "")
+            if not _is_client_context(text):
+                return text
+    return ""
+
+
+def _last_user_text(body: bytes) -> str:
+    """Best-effort extract the operator's reply: the newest input item.
+
+    A reply answers a held request only when it is the newest item the
+    client sent. An agent's tool loop keeps re-sending the operator's
+    earlier ``yes`` as the last user-role message while tool calls and
+    results pile up after it; reading it there would approve every later
+    held request in the turn. So when the newest item is anything other
+    than user text (assistant output, a tool call, a tool result with
+    nothing typed after it, reasoning), there is no reply and this
+    returns ``""``.
+
+    For an Anthropic ``/v1/messages`` or Chat Completions body, that's the
+    last message (see :func:`_typed_after_tool_result` when it carries tool
+    results). For an OpenAI Responses body, the last ``input`` item. For
+    other shapes, returns the whole decoded body so trivial one-word inputs
+    still work.
     """
     try:
         body_text = body.decode("utf-8", errors="replace")
@@ -101,48 +143,45 @@ def _last_user_text(body: bytes) -> str:
     if not isinstance(body_json, dict):
         return ""
 
-    msgs = body_json.get("messages") or []
-    if isinstance(msgs, list):
-        # Walk from the end for the last user-role message
-        for msg in reversed(msgs):
-            if not isinstance(msg, dict):
-                continue
-            if msg.get("role") != "user":
-                continue
-            content = msg.get("content")
-            if isinstance(content, str):
-                return content
-            if isinstance(content, list):
-                # Pick first text block
-                for blk in content:
-                    if isinstance(blk, dict) and blk.get("type") == "text":
-                        return str(blk.get("text") or "")
-            break
+    msgs = body_json.get("messages")
+    if isinstance(msgs, list) and msgs:
+        msg = msgs[-1]
+        if not isinstance(msg, dict) or msg.get("role") != "user":
+            return ""
+        content = msg.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            if any(_is_tool_result(b) for b in content):
+                return _typed_after_tool_result(content)
+            # Pick first text block
+            for blk in content:
+                if isinstance(blk, dict) and blk.get("type") == "text":
+                    return str(blk.get("text") or "")
+        return ""
 
-    # OpenAI Responses API request.  A Codex request can carry the full
-    # interaction history in ``input`` and may end with reasoning or tool
-    # items, so locate the last user-role message rather than assuming the
-    # last input item is user text.
+    # OpenAI Responses API request.  A Codex request carries the full
+    # interaction history in ``input``; the newest item must be the user
+    # message itself, not reasoning or tool items that followed it.
     inputs = body_json.get("input")
     if isinstance(inputs, str):
         return inputs
-    if isinstance(inputs, list):
-        for item in reversed(inputs):
-            if not isinstance(item, dict) or item.get("role") != "user":
-                continue
-            content = item.get("content")
-            if isinstance(content, str):
-                return content
-            if isinstance(content, list):
-                # The approval is the trailing user-text segment.  Accept
-                # both canonical Responses ``input_text`` blocks and the
-                # compatible ``text`` shape used by some clients.
-                for block in reversed(content):
-                    if not isinstance(block, dict):
-                        continue
-                    if block.get("type") in ("input_text", "text"):
-                        return str(block.get("text") or "")
-            break
+    if isinstance(inputs, list) and inputs:
+        item = inputs[-1]
+        if not isinstance(item, dict) or item.get("role") != "user":
+            return ""
+        content = item.get("content")
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            # The approval is the trailing user-text segment.  Accept
+            # both canonical Responses ``input_text`` blocks and the
+            # compatible ``text`` shape used by some clients.
+            for block in reversed(content):
+                if not isinstance(block, dict):
+                    continue
+                if block.get("type") in ("input_text", "text"):
+                    return str(block.get("text") or "")
     return ""
 
 
@@ -159,7 +198,7 @@ def _normalize(s: str) -> str:
 
 
 def parse_intent(body: bytes) -> Intent:
-    """Classify the trailing user-text as positive/negative/ambiguous.
+    """Classify the newest user-text item as positive/negative/ambiguous.
 
     Returns AMBIGUOUS unless the *entire* normalized last-user-text exactly
     matches a positive or negative vocab entry. This keeps "I'll go ahead

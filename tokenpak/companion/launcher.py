@@ -255,6 +255,9 @@ def main(args: list[str] | None = None) -> int:
             pass
     if proxy_url:
         env["ANTHROPIC_BASE_URL"] = proxy_url
+        from tokenpak.proxy.spend_guard.unattended import claude_headers
+
+        claude_headers(env)
 
     # Print styled startup banner
     from tokenpak.cli.commands.status import MEME_LINES, _get_version

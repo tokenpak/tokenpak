@@ -33,36 +33,42 @@ def _responses_body(text: str, *, segment_type: str = "input_text") -> bytes:
     ).encode()
 
 
-def _full_history_approval(text: str) -> bytes:
-    return json.dumps(
+def _full_history_approval(text: str, *, trailing_items: bool = True) -> bytes:
+    """Full Codex history whose latest user turn carries ``text``.
+
+    ``trailing_items`` appends the reasoning and tool items an agent loop
+    adds after that user turn; without them the user turn is the newest item.
+    """
+    items = [
         {
-            "model": "gpt-5.6-sol",
-            "input": [
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": [{"type": "input_text", "text": "original request"}],
-                },
-                {"type": "reasoning", "summary": []},
-                {
-                    "type": "message",
-                    "role": "assistant",
-                    "content": [{"type": "output_text", "text": "yes"}],
-                },
-                {"type": "function_call", "name": "check", "arguments": "{}"},
-                {"type": "function_call_output", "output": "ok"},
-                {
-                    "type": "message",
-                    "role": "user",
-                    "content": [
-                        {"type": "input_image", "image_url": "data:image/png;base64,"},
-                        {"type": "input_text", "text": text},
-                    ],
-                },
-                {"type": "reasoning", "summary": [{"type": "summary_text", "text": "done"}]},
-                {"type": "function_call", "name": "after_user", "arguments": "{}"},
+            "type": "message",
+            "role": "user",
+            "content": [{"type": "input_text", "text": "original request"}],
+        },
+        {"type": "reasoning", "summary": []},
+        {
+            "type": "message",
+            "role": "assistant",
+            "content": [{"type": "output_text", "text": "yes"}],
+        },
+        {"type": "function_call", "name": "check", "arguments": "{}"},
+        {"type": "function_call_output", "output": "ok"},
+        {
+            "type": "message",
+            "role": "user",
+            "content": [
+                {"type": "input_image", "image_url": "data:image/png;base64,"},
+                {"type": "input_text", "text": text},
             ],
         },
+    ]
+    if trailing_items:
+        items += [
+            {"type": "reasoning", "summary": [{"type": "summary_text", "text": "done"}]},
+            {"type": "function_call", "name": "after_user", "arguments": "{}"},
+        ]
+    return json.dumps(
+        {"model": "gpt-5.6-sol", "input": items},
         separators=(",", ":"),
     ).encode()
 
@@ -80,8 +86,14 @@ def test_responses_intent_yes_no_and_ambiguous(text, expected, segment_type):
     assert parse_intent(_responses_body(text, segment_type=segment_type)) is expected
 
 
-def test_responses_intent_scans_back_from_reasoning_and_tool_items():
-    assert parse_intent(_full_history_approval("yes")) is Intent.POSITIVE
+def test_responses_intent_reads_newest_user_turn_after_tool_history():
+    assert parse_intent(_full_history_approval("yes", trailing_items=False)) is Intent.POSITIVE
+
+
+def test_responses_intent_ignores_user_turn_followed_by_agent_items():
+    # The agent loop re-sends the earlier yes with its own items after it;
+    # that yes is not a reply to a newer hold.
+    assert parse_intent(_full_history_approval("yes")) is Intent.AMBIGUOUS
 
 
 def test_responses_tip_allow_once_is_parsed_and_stripped():
@@ -201,7 +213,7 @@ def test_concurrent_codex_sessions_keep_pending_and_approvals_isolated(tmp_path,
     assert pending_b is not None and pending_b.pending_id == blocked_b.pending_id
 
     replay_a = orchestrator.evaluate(
-        _full_history_approval("yes"),
+        _full_history_approval("yes", trailing_items=False),
         "gpt-5.6-sol",
         session_a,
         {},

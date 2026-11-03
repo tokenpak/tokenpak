@@ -160,4 +160,5 @@ def stub_upstream() -> Generator[_CountingHTTPServer, None, None]:
     t.start()
     yield server
     server.shutdown()
+    server.server_close()
     t.join(timeout=2)

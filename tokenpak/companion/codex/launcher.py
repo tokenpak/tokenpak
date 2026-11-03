@@ -240,6 +240,11 @@ def _with_tokenpak_proxy_route(
         _audit_guard_bypassed_proxy_unhealthy(session_id)
         return list(args), False
     provider = _TOKENPAK_MODEL_PROVIDER
+    from tokenpak.proxy.spend_guard.unattended import ENV, HEADER
+
+    unattended_args = []
+    if os.environ.get(ENV) == "1":
+        unattended_args = ["-c", f'model_providers.{provider}.http_headers."{HEADER}"="1"']
     return [
         "-c",
         f'model_provider="{provider}"',
@@ -253,6 +258,7 @@ def _with_tokenpak_proxy_route(
         f"model_providers.{provider}.requires_openai_auth=true",
         "-c",
         f"model_providers.{provider}.supports_websockets=false",
+        *unattended_args,
         *args,
     ], True
 

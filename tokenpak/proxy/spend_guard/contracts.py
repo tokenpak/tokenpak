@@ -75,6 +75,8 @@ class PendingRequest:
     raw_request_headers: dict[str, str]  # forwarded as-is on replay (auth etc.)
     target_url: str  # provider URL to replay to
     status: Literal["pending", "consumed", "discarded", "expired"] = "pending"
+    unattended: bool = False
+    block_metadata: dict = field(default_factory=dict)
 
 
 # ---------------------------------------------------------------------------

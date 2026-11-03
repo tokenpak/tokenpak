@@ -8,6 +8,11 @@ Byte-preservation invariant: when intent is POSITIVE, the original held
 bytes are returned verbatim (decompressed from gzip storage), with the
 original headers attached. This matches the proxy's overall byte-passthrough
 guarantee — replay must not re-serialize JSON.
+
+Approval-scope invariant: one typed reply resolves exactly one held request.
+A yes / no counts only when it is the newest input item (see ``intent.py``)
+and answers the current hold: a re-send of a held request, or of a reply
+that already resolved one, is not a new answer.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ def resolve_pending(
     tip: Optional[TIPDirective],
     cfg: SpendGuardConfig,
     builders: dict[str, Callable[[PendingRequest], bytes]],
+    reply_hash: str,
 ) -> GuardOutcome:
     """Dispatch on the parsed intent (and optional TIP allow-once).
 
@@ -49,6 +55,11 @@ def resolve_pending(
         Response-body builders, injected by the orchestrator to keep this
         module free of import cycles. Expects keys: ``cancelled``, ``reprompt``,
         ``pending_waiting``.
+    reply_hash : str
+        :func:`~.pending.hash_request` of the new request's raw bytes. A
+        yes / no whose request was already held, or already resolved a
+        hold, in this session is re-prompted instead of acted on; a reply
+        that resolves this hold is recorded against it.
     """
     # TIP-driven allow-once / bypass: take precedence over text intent. The
     # caller is explicitly authorizing a replay.
@@ -73,8 +84,19 @@ def resolve_pending(
             audit_event="replay",
         )
 
+    if intent != Intent.AMBIGUOUS and store.reply_seen(pending.session_id, reply_hash):
+        # The same trailing yes / no re-sent (a client retry, or a later
+        # request carrying the same reply) — not an answer to this hold.
+        return GuardOutcome(
+            kind="reprompt",
+            response_body=builders["reprompt"](pending),
+            http_status=402,
+            pending_id=pending.pending_id,
+            audit_event="stale_reply",
+        )
+
     if intent == Intent.POSITIVE:
-        consumed = store.consume(pending.pending_id)
+        consumed = store.consume(pending.pending_id, answered_by=reply_hash)
         if consumed is None:
             return GuardOutcome(
                 kind="block",
@@ -93,7 +115,7 @@ def resolve_pending(
         )
 
     if intent == Intent.NEGATIVE:
-        store.discard(pending.pending_id)
+        store.discard(pending.pending_id, answered_by=reply_hash)
         return GuardOutcome(
             kind="cancel",
             response_body=builders["cancelled"](pending),

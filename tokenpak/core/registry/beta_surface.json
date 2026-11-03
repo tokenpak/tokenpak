@@ -83,6 +83,7 @@
     "requests": "Raw request listing is implementation-facing; 'report' is the user-facing view.",
     "retrieval": "Retrieval tuning surface aimed at index operators.",
     "run": "Generic automation runner; not part of the beta path.",
+    "spend-guard": "Operator approval and escalation review for unattended requests; not verified on the beta path.",
     "telemetry": "Telemetry administration surface for operators.",
     "template": "Template management is unverified end-to-end.",
     "test": "Internal test harness. Not a product capability.",

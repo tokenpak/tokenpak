@@ -62,7 +62,7 @@ from .block_response import (
 from .block_response import (
     reprompt as build_reprompt,
 )
-from .contracts import GuardOutcome, OutcomeKind, PendingRequest, PreflightDecision
+from .contracts import GuardOutcome, OutcomeKind, PendingRequest, PreflightDecision, TIPDirective
 from .estimator import estimate as run_estimate
 from .pending import PendingStore, hash_request
 from .policy import SpendGuardConfig, decide, load_config
@@ -119,6 +119,27 @@ def evaluate(
     config: Optional[SpendGuardConfig] = None,
     target_url: str = "",
 ) -> GuardOutcome:
+    """Evaluate a request and publish unattended denials to the audit stream."""
+    from .unattended import finalize_block, requested
+
+    cfg = config or load_config()
+    outcome = _evaluate(body, model, session_id, headers, config=cfg, target_url=target_url)
+    if outcome.kind in ("block", "hard_block", "reprompt") and (
+        requested(headers) or outcome.audit_event == "unattended_block"
+    ):
+        return finalize_block(outcome, cfg, session_id)
+    return outcome
+
+
+def _evaluate(
+    body: bytes,
+    model: str,
+    session_id: str,
+    headers: dict[str, str],
+    *,
+    config: Optional[SpendGuardConfig] = None,
+    target_url: str = "",
+) -> GuardOutcome:
     """Run the full pre-send pipeline.
 
     Returns a :class:`GuardOutcome` the proxy hook will interpret.
@@ -134,6 +155,13 @@ def evaluate(
     if not cfg.enabled:
         return GuardOutcome.passthrough(body)
 
+    from .unattended import requested, resolve
+
+    store = PendingStore(cfg.audit_db_path)
+    _maybe_expire_pending(store)
+    existing_pending = store.get_by_session(session_id)
+    unattended = requested(headers) or bool(existing_pending and existing_pending.unattended)
+
     # TIP header parse + strip. Imported lazily so the earlier stages can
     # run before this lands. Until tip_header.py exists, treat as no-op.
     tip_directive = None
@@ -146,6 +174,16 @@ def evaluate(
         pass
     except Exception as e:
         _log.debug("spend_guard: TIP header parse failed: %s", e)
+
+    # Unattended callers cannot authorize themselves through conversation.
+    # Mode sticks to the hold, even when a retry omits the launch header.
+    if unattended:
+        tip_directive = None
+        if existing_pending is not None:
+            if not existing_pending.unattended:
+                store.mark_unattended(existing_pending.pending_id)
+                existing_pending.unattended = True
+            return resolve(store, existing_pending, body, model, target_url, cfg)
 
     # TIP cancel — discard any pending and acknowledge.
     if tip_directive is not None and tip_directive.cancel:
@@ -175,10 +213,6 @@ def evaluate(
 
     # Pending check + intent parse. Lazy import for the same
     # reason — the earlier stage can land before the intent parser exists.
-    store = PendingStore(cfg.audit_db_path)
-    # Reconcile stale pending rows (first call in the process + periodic).
-    _maybe_expire_pending(store)
-    existing_pending = store.get_by_session(session_id)
     if existing_pending is not None:
         try:
             from .intent import parse_intent
@@ -196,13 +230,16 @@ def evaluate(
                     "reprompt": build_reprompt,
                     "pending_waiting": build_pending_waiting,
                 },
+                # Raw bytes, hashed like a held request's ``request_hash``.
+                reply_hash=hash_request(body, model),
             )
+            resolution = "stale" if outcome.audit_event == "stale_reply" else "resolved"
             _audit(
                 cfg,
                 outcome.audit_event or "pending",
                 session_id,
                 decision_str=outcome.kind,
-                reason=f"pending_intent_resolved:{intent.value}",
+                reason=f"pending_intent_{resolution}:{intent.value}",
                 pending_id=existing_pending.pending_id,
                 projected_tokens=existing_pending.projected_tokens,
                 tip=tip_directive,
@@ -350,10 +387,46 @@ def evaluate(
                         + int(est.projected_output_tokens),
                         tip=tip_directive,
                     )
+                    if unattended:
+                        from ._context_window import get_model_max_context
+
+                        hard_check = decide(
+                            est, cfg, model_max_context_tokens=get_model_max_context(model)
+                        )
+                        if hard_check.decision == "hard_block":
+                            return GuardOutcome(
+                                kind="hard_block",
+                                http_status=402,
+                                response_body=build_hard_block(hard_check),
+                                decision=hard_check,
+                            )
+                        return _store_block(
+                            store,
+                            cfg,
+                            body,
+                            headers,
+                            model,
+                            session_id,
+                            target_url,
+                            PreflightDecision(
+                                decision="block",
+                                reason=f"rolling_cap_breach:{breach.cap_dimension}",
+                                requires_approval=False,
+                                risk=est,
+                            ),
+                            tip_directive,
+                            unattended=True,
+                        )
                     return GuardOutcome(
                         kind="block",
                         response_body=build_rolling_cap_block(breach),
                         http_status=402,
+                        decision=PreflightDecision(
+                            decision="block",
+                            reason=f"rolling_cap_breach:{breach.cap_dimension}",
+                            requires_approval=False,
+                            risk=est,
+                        ),
                         audit_event="rolling_cap_block",
                     )
                 else:
@@ -502,6 +575,36 @@ def evaluate(
 
     # ── Block → store pending, return block JSON
     _cancel_admission()  # blocked requests never reach the provider
+    return _store_block(
+        store,
+        cfg,
+        body,
+        headers,
+        model,
+        session_id,
+        target_url,
+        decision,
+        tip_directive,
+        unattended=unattended,
+    )
+
+
+def _store_block(
+    store: PendingStore,
+    cfg: SpendGuardConfig,
+    body: bytes,
+    headers: dict[str, str],
+    model: str,
+    session_id: str,
+    target_url: str,
+    decision: PreflightDecision,
+    tip_directive: Optional[TIPDirective],
+    *,
+    unattended: bool = False,
+) -> GuardOutcome:
+    """Persist a soft denial using the same hold contract for every budget band."""
+    est = decision.risk
+    assert est is not None
     if not session_id:
         _audit(
             cfg,
@@ -531,6 +634,13 @@ def evaluate(
             projected_tokens=est.projected_input_tokens + est.projected_output_tokens,
             projected_cost_usd=est.projected_cost_usd,
             ttl_seconds=cfg.pending_ttl_seconds,
+            unattended=unattended,
+            block_metadata={
+                "reason": decision.reason,
+                "threshold_hit": decision.threshold_hit,
+                "projected_input_tokens": est.projected_input_tokens,
+                "projected_output_tokens": est.projected_output_tokens,
+            },
         )
     except Exception as e:
         # The policy already decided BLOCK. A pending-store failure must

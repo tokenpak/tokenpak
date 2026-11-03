@@ -3989,6 +3989,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub = parser.add_subparsers(dest="command", required=False)
 
+    from tokenpak.cli.commands.spend_guard import register_parser as register_spend_guard
+
+    register_spend_guard(sub)
+
     # ── Progressive disclosure: help + aliases ────────────────────────────────
     p_menu = sub.add_parser("menu", help="Interactive command browser (arrow-key navigation)")
     p_menu.set_defaults(

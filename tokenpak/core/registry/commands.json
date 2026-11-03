@@ -98,6 +98,19 @@
       ]
     },
     {
+      "command": "spend-guard",
+      "tier": "oss",
+      "category": "Control",
+      "description": "Review unattended Spend Guard blocks",
+      "aliases": [],
+      "usage": "/tokenpak spend-guard <approve|events> [--json]",
+      "detail": "Read escalation events or approve one identical retry of an unexpired held request. Approval does not send a request.",
+      "related": [
+        "budget",
+        "cost"
+      ]
+    },
+    {
       "command": "cost",
       "tier": "oss",
       "category": "Visibility",
