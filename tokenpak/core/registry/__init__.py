@@ -19,6 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Dict, Generator, List, Optional
 
+from tokenpak._sqlite_lifecycle import ThreadConnection as _ThreadConnection
+
 if TYPE_CHECKING:
     pass
 
@@ -155,6 +157,8 @@ class BlockRegistry:
             conn.execute("PRAGMA temp_store=MEMORY")
             conn.execute("PRAGMA mmap_size=268435456")  # 256MB mmap
             self._local.conn = conn
+            # Closes this thread's connection when the thread exits.
+            self._local.closer = _ThreadConnection(conn)
         conn_obj: sqlite3.Connection = self._local.conn
         return conn_obj
 

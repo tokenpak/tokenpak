@@ -10,8 +10,10 @@ __all__ = (
     "truncate_to_tokens",
 )
 
-from functools import lru_cache
-from typing import Optional, Protocol, Sequence, Tuple
+import hashlib
+import threading
+from collections import OrderedDict, namedtuple
+from typing import Hashable, Optional, Protocol, Sequence, Tuple
 
 
 class _Encoder(Protocol):
@@ -61,21 +63,52 @@ def tokenizer_name() -> Optional[str]:
     return "tiktoken:cl100k_base" if _get_encoder() is not None else None
 
 
-@lru_cache(maxsize=8192)
+_CacheInfo = namedtuple("CacheInfo", ["hits", "misses", "maxsize", "currsize"])
+
+_CACHE_MAXSIZE = 8192
+#: Texts up to this many characters are their own cache key. A longer text is
+#: keyed by its length and a 128-bit digest, so the cache never keeps a copy
+#: of it: 8,192 entries of 100,000-character chunks (the proxy's token-count
+#: endpoint) or of ``truncate_to_tokens`` prefixes would otherwise hold
+#: hundreds of megabytes for the life of the process.
+_KEY_TEXT_MAX_CHARS = 256
+
+_CACHE: "OrderedDict[Hashable, int]" = OrderedDict()
+_CACHE_LOCK = threading.Lock()
+_CACHE_HITS = 0
+_CACHE_MISSES = 0
+
+
+def _cache_key(text: str) -> Hashable:
+    if len(text) <= _KEY_TEXT_MAX_CHARS:
+        return text
+    digest = hashlib.blake2b(text.encode("utf-8", "surrogatepass"), digest_size=16).digest()
+    return (len(text), digest)
+
+
 def count_tokens(text: str) -> int:
     """
-    Count tokens with LRU cache (8192 entries).
+    Count tokens with an LRU cache (8192 entries).
 
-    Cache key is the text itself. Python interns short strings,
-    and for longer texts the hash collision rate is negligible.
+    Short texts are cached by value; longer texts by length and digest, so
+    the cache's memory stays bounded however large the texts are.
     """
-    if not text:
-        return 0
-    enc = _get_encoder()
-    if enc is not None:
-        return len(enc.encode(text))
-    # Fallback: ~4 chars per token
-    return max(1, len(text) // 4)
+    global _CACHE_HITS, _CACHE_MISSES
+    key = _cache_key(text)
+    with _CACHE_LOCK:
+        cached = _CACHE.get(key)
+        if cached is not None:
+            _CACHE.move_to_end(key)
+            _CACHE_HITS += 1
+            return cached
+        _CACHE_MISSES += 1
+    result = count_tokens_uncached(text)
+    with _CACHE_LOCK:
+        _CACHE[key] = result
+        _CACHE.move_to_end(key)
+        while len(_CACHE) > _CACHE_MAXSIZE:
+            _CACHE.popitem(last=False)
+    return result
 
 
 def count_tokens_uncached(text: str) -> int:
@@ -164,9 +197,14 @@ def estimate_tokens(text: str) -> int:
 
 def clear_cache() -> None:
     """Clear the token count cache."""
-    count_tokens.cache_clear()
+    global _CACHE_HITS, _CACHE_MISSES
+    with _CACHE_LOCK:
+        _CACHE.clear()
+        _CACHE_HITS = 0
+        _CACHE_MISSES = 0
 
 
 def cache_info() -> CacheStats:
     """Get cache statistics."""
-    return count_tokens.cache_info()
+    with _CACHE_LOCK:
+        return _CacheInfo(_CACHE_HITS, _CACHE_MISSES, _CACHE_MAXSIZE, len(_CACHE))
