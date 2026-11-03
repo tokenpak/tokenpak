@@ -75,6 +75,8 @@ class PendingRequest:
     raw_request_headers: dict[str, str]  # forwarded as-is on replay (auth etc.)
     target_url: str  # provider URL to replay to
     status: Literal["pending", "consumed", "discarded", "expired"] = "pending"
+    projected_input_tokens: Optional[int] = None
+    block_response: Optional[bytes] = None
 
 
 # ---------------------------------------------------------------------------

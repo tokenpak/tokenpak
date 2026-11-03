@@ -1794,6 +1794,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
         # Disabled with: spend_guard.enabled=false in config.yaml
         #            or: TOKENPAK_SPEND_GUARD_ENABLED=0
         _sg_admission_ticket = None  # rolling-cap in-flight spend ticket
+        _sg_anchor_body = body
         if should_log and is_model_request and body:
             try:
                 from tokenpak.proxy.request_pipeline import _resolve_session_id
@@ -1838,11 +1839,13 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 if _sg_outcome.kind in ("forward", "forward_modified"):
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
+                    _sg_anchor_body = body
                 elif _sg_outcome.kind == "replay":
                     # Held request is being replayed — substitute body
                     # and headers, then continue down the normal forward path.
                     if _sg_outcome.body is not None:
                         body = _sg_outcome.body
+                    _sg_anchor_body = body
                     if _sg_outcome.headers:
                         # Re-apply only the held request's NON-credential
                         # headers (content-type, api-version, etc.). Credential
@@ -2996,6 +2999,21 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                     complete=_guard_response_complete,
                     status=_resp_status,
                 )
+                if _guard_response_complete and 200 <= _resp_status < 300:
+                    try:
+                        from .request_pipeline import _resolve_session_id
+                        from .spend_guard.usage_anchor import record_completed
+
+                        record_completed(
+                            _sg_anchor_body,
+                            model,
+                            _resolve_session_id(self.headers, ""),
+                            provider_usage_object,
+                            provider=_usage_parser_provider,
+                            started_at=t0,
+                        )
+                    except Exception:
+                        logger.debug("Spend Guard usage anchor unavailable", exc_info=True)
                 _provider_usage = _safe_provider_usage_observation(
                     _usage_parser_provider,
                     provider_usage_object,

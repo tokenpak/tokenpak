@@ -9,6 +9,7 @@ returns ``AMBIGUOUS`` and the user is re-prompted.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 import string
@@ -19,6 +20,34 @@ class Intent(Enum):
     POSITIVE = "positive"
     NEGATIVE = "negative"
     AMBIGUOUS = "ambiguous"
+
+
+_BACKGROUND = re.compile(r"<(task-notification|system-reminder)\b[^>]*>.*?</\1\s*>", re.S | re.I)
+
+
+def _human_text(text: str) -> str:
+    return _BACKGROUND.sub("", text).strip()
+
+
+def has_human_text(body: bytes) -> bool:
+    return bool(_human_text(_last_user_text(body)))
+
+
+def approval_fingerprint(body: bytes) -> str:
+    """Identify a user turn without storing text; trailing tool items do not renew it."""
+    try:
+        parsed = json.loads(body)
+        for field in ("messages", "input"):
+            history = parsed.get(field)
+            if isinstance(history, list):
+                for index in range(len(history) - 1, -1, -1):
+                    if isinstance(history[index], dict) and history[index].get("role") == "user":
+                        return hashlib.sha256(
+                            json.dumps(history[: index + 1], sort_keys=True).encode()
+                        ).hexdigest()
+    except (ValueError, AttributeError):
+        pass
+    return hashlib.sha256(body).hexdigest()
 
 
 # Single source of truth for intent vocab — extend here, not in five places.
@@ -113,10 +142,11 @@ def _last_user_text(body: bytes) -> str:
             if isinstance(content, str):
                 return content
             if isinstance(content, list):
-                # Pick first text block
-                for blk in content:
-                    if isinstance(blk, dict) and blk.get("type") == "text":
-                        return str(blk.get("text") or "")
+                return "\n".join(
+                    str(blk.get("text") or "")
+                    for blk in content
+                    if isinstance(blk, dict) and blk.get("type") == "text"
+                )
             break
 
     # OpenAI Responses API request.  A Codex request can carry the full
@@ -165,7 +195,7 @@ def parse_intent(body: bytes) -> Intent:
     matches a positive or negative vocab entry. This keeps "I'll go ahead
     and write..." from being misread as a positive intent.
     """
-    text = _last_user_text(body)
+    text = _human_text(_last_user_text(body))
     norm = _normalize(text)
     if not norm:
         return Intent.AMBIGUOUS

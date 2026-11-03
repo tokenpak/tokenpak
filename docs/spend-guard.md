@@ -140,6 +140,10 @@ Same shape but `error.type=tokenpak_spend_guard_hard_blocked`, `retryable: false
 
 ## Releasing a held request
 
+See [media estimates and context approvals](spend-guard-estimates.md) for image
+and PDF counting, observed usage anchors, late replies, and persistent context
+approvals. A bare `yes` releases one unexpired held request.
+
 ### Interactive (Yes / No)
 
 After receiving a block response, send a request whose last user-message content is **exactly** one of:

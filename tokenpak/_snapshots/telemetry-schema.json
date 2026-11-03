@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-09-12T23:06:37Z",
+  "generated_at": "2026-11-03T23:50:45Z",
   "stores": [
     {
       "path": "~/.tpk/telemetry.db",
@@ -189,8 +189,18 @@
           },
           {
             "type": "table",
+            "name": "context_approvals",
+            "sql": "CREATE TABLE context_approvals (\n                scope_key TEXT PRIMARY KEY, expires_at REAL,\n                max_tokens INTEGER, remaining_cost REAL)"
+          },
+          {
+            "type": "table",
+            "name": "expired_approval_uses",
+            "sql": "CREATE TABLE expired_approval_uses (\n                scope_key TEXT NOT NULL, reply_hash TEXT NOT NULL,\n                used_at REAL NOT NULL, PRIMARY KEY(scope_key, reply_hash))"
+          },
+          {
+            "type": "table",
             "name": "pending_requests",
-            "sql": "CREATE TABLE pending_requests (\n            pending_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL,\n            created_at REAL NOT NULL,\n            expires_at REAL NOT NULL,\n            request_hash TEXT NOT NULL,\n            provider TEXT NOT NULL DEFAULT '',\n            model TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            raw_request_blob BLOB NOT NULL,\n            raw_request_headers TEXT NOT NULL DEFAULT '{}',\n            target_url TEXT NOT NULL DEFAULT '',\n            status TEXT NOT NULL DEFAULT 'pending'\n        )"
+            "sql": "CREATE TABLE pending_requests (\n            pending_id TEXT PRIMARY KEY,\n            session_id TEXT NOT NULL,\n            created_at REAL NOT NULL,\n            expires_at REAL NOT NULL,\n            request_hash TEXT NOT NULL,\n            provider TEXT NOT NULL DEFAULT '',\n            model TEXT NOT NULL DEFAULT '',\n            projected_tokens INTEGER NOT NULL DEFAULT 0,\n            projected_cost_usd REAL NOT NULL DEFAULT 0.0,\n            raw_request_blob BLOB NOT NULL,\n            raw_request_headers TEXT NOT NULL DEFAULT '{}',\n            target_url TEXT NOT NULL DEFAULT '',\n            status TEXT NOT NULL DEFAULT 'pending'\n        , projected_input_tokens INTEGER, block_response BLOB)"
           },
           {
             "type": "table",

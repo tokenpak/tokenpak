@@ -735,6 +735,7 @@ def decide(
     *,
     session_running_cost_usd: float = 0.0,
     model_max_context_tokens: Optional[int] = None,
+    context_soft_approved: bool = False,
 ) -> PreflightDecision:
     """Compare the estimate to thresholds and return a verdict.
 
@@ -848,6 +849,7 @@ def decide(
         )
 
     # 3. TIP-declared ceiling
+    context_scope = tip is not None and tip.allow_scope in ("15m", "session")
     if tip is not None and (
         tip.bypass or tip.allow_scope or tip.max_cost_usd is not None or tip.max_tokens is not None
     ):
@@ -863,7 +865,7 @@ def decide(
         if tip.bypass and tip.max_cost_usd is None and tip.max_tokens is None:
             cost_ok = (cfg.block_cost_usd <= 0) or (cost < cfg.block_cost_usd)
             tokens_ok = tokens < effective_block_tokens
-        if cost_ok and tokens_ok:
+        if cost_ok and tokens_ok and not context_scope:
             return PreflightDecision(
                 decision="allow",
                 reason="tip_bypass_within_ceiling",
@@ -871,16 +873,21 @@ def decide(
                 threshold_hit="tip_directive",
                 risk=estimate,
             )
-        return PreflightDecision(
-            decision="block",
-            reason="projected_exceeds_tip_ceiling",
-            requires_approval=True,
-            threshold_hit="tip_ceiling",
-            risk=estimate,
-        )
+        if not cost_ok or not tokens_ok:
+            return PreflightDecision(
+                decision="block",
+                reason="projected_exceeds_tip_ceiling",
+                requires_approval=True,
+                threshold_hit="tip_ceiling",
+                risk=estimate,
+            )
 
     # 4. Context-window-% soft block (canonical).
-    if pct_block_tokens is not None and input_tokens >= pct_block_tokens:
+    if (
+        pct_block_tokens is not None
+        and input_tokens >= pct_block_tokens
+        and not (context_scope or context_soft_approved)
+    ):
         return PreflightDecision(
             decision="block",
             reason="projected_exceeds_context_window_percent",

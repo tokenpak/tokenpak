@@ -33,6 +33,7 @@ __all__ = (
 )
 
 
+import json
 import logging
 import threading
 import time
@@ -62,7 +63,7 @@ from .block_response import (
 from .block_response import (
     reprompt as build_reprompt,
 )
-from .contracts import GuardOutcome, OutcomeKind, PendingRequest, PreflightDecision
+from .contracts import GuardOutcome, OutcomeKind, PendingRequest, PreflightDecision, TIPDirective
 from .estimator import estimate as run_estimate
 from .pending import PendingStore, hash_request
 from .policy import SpendGuardConfig, decide, load_config
@@ -77,6 +78,30 @@ _log = logging.getLogger(__name__)
 _EXPIRE_SWEEP_INTERVAL_SEC = 300.0
 _EXPIRE_SWEEP_LOCK = threading.Lock()
 _LAST_EXPIRE_SWEEP = 0.0
+
+
+def _estimate_anchored(body: bytes, model: str, session_id: str):
+    from .usage_anchor import projection_floor
+
+    try:
+        floor = projection_floor(body, model, session_id)
+    except (ValueError, TypeError, AttributeError):
+        floor = 0  # Unsupported history still receives structural estimation.
+    return (
+        run_estimate(body, model, fallback_session_tokens=floor)
+        if floor
+        else run_estimate(body, model)
+    )
+
+
+def _held_response(pending: PendingRequest) -> GuardOutcome:
+    return GuardOutcome(
+        kind="block",
+        response_body=pending.block_response or build_block(_synthetic_decision(pending), pending),
+        http_status=402,
+        pending_id=pending.pending_id,
+        audit_event="pending_waiting",
+    )
 
 
 def _maybe_expire_pending(store: "PendingStore") -> None:
@@ -150,6 +175,9 @@ def evaluate(
     # TIP cancel — discard any pending and acknowledge.
     if tip_directive is not None and tip_directive.cancel:
         store = PendingStore(cfg.audit_db_path)
+        from .approvals import ContextApprovals, scope_key
+
+        ContextApprovals(store.path).revoke(scope_key(session_id, model, headers))
         existing = store.get_by_session(session_id)
         if existing:
             store.discard(existing.pending_id)
@@ -178,36 +206,129 @@ def evaluate(
     store = PendingStore(cfg.audit_db_path)
     # Reconcile stale pending rows (first call in the process + periodic).
     _maybe_expire_pending(store)
-    existing_pending = store.get_by_session(session_id)
+    existing_pending = store.latest_hold(session_id)
+    from .approvals import ContextApprovals, scope_key
+    from .intent import Intent, approval_fingerprint, has_human_text
+
+    approvals = ContextApprovals(store.path)
+    approval_key = scope_key(session_id, model, headers)
+    late_pending = None
+    scope_replay = None
+    late_reply_hash = ""
+    earlier_hold_expired = False
     if existing_pending is not None:
         try:
             from .intent import parse_intent
             from .replay import resolve_pending
 
             intent = parse_intent(forward_body)
-            outcome = resolve_pending(
-                store=store,
-                pending=existing_pending,
-                intent=intent,
-                tip=tip_directive,
-                cfg=cfg,
-                builders={
-                    "cancelled": build_cancelled,
-                    "reprompt": build_reprompt,
-                    "pending_waiting": build_pending_waiting,
-                },
+            if not has_human_text(forward_body) and tip_directive is None:
+                return _held_response(existing_pending)
+            if (
+                existing_pending.model != model
+                or scope_key(session_id, model, existing_pending.raw_request_headers)
+                != approval_key
+            ):
+                return _held_response(existing_pending)
+            reply_hash = approval_fingerprint(forward_body)
+            approving = intent == Intent.POSITIVE or (
+                tip_directive is not None
+                and (tip_directive.allow_scope or tip_directive.bypass)
+                and intent != Intent.NEGATIVE
             )
-            _audit(
-                cfg,
-                outcome.audit_event or "pending",
-                session_id,
-                decision_str=outcome.kind,
-                reason=f"pending_intent_resolved:{intent.value}",
-                pending_id=existing_pending.pending_id,
-                projected_tokens=existing_pending.projected_tokens,
-                tip=tip_directive,
-            )
-            return outcome
+            if approving and approvals.reply_used(approval_key, reply_hash):
+                return _held_response(existing_pending)
+            expired = existing_pending.expires_at <= time.time()
+            if expired and approving:
+                late_pending = existing_pending
+                late_reply_hash = reply_hash
+            elif expired:
+                if intent == Intent.NEGATIVE:
+                    approvals.revoke(approval_key)
+                    store.discard(existing_pending.pending_id)
+                    return GuardOutcome(
+                        kind="cancel",
+                        response_body=build_cancelled(existing_pending),
+                        pending_id=existing_pending.pending_id,
+                        audit_event="cancel",
+                    )
+                return _held_response(existing_pending)
+            if not expired and (
+                intent == Intent.POSITIVE
+                or (
+                    tip_directive is not None
+                    and (tip_directive.allow_scope or tip_directive.bypass)
+                )
+            ):
+                from ._context_window import get_model_max_context
+
+                held_estimate = _estimate_anchored(
+                    existing_pending.raw_request_blob, model, session_id
+                )
+                held_decision = decide(
+                    held_estimate,
+                    cfg,
+                    tip=tip_directive,
+                    model_max_context_tokens=get_model_max_context(model),
+                )
+                if held_decision.decision == "hard_block":
+                    return GuardOutcome(
+                        kind="hard_block",
+                        response_body=build_hard_block(held_decision),
+                        http_status=402,
+                        decision=held_decision,
+                    )
+                if (
+                    tip_directive is not None
+                    and tip_directive.allow_scope in ("15m", "session")
+                    and held_decision.decision == "block"
+                ):
+                    return _held_response(existing_pending)
+            if (
+                not expired
+                and approving
+                and tip_directive is not None
+                and tip_directive.allow_scope in ("15m", "session")
+            ):
+                # Persistent grants authorize only the context-percent band.
+                # Evaluate the held bytes through rolling and session caps
+                # before consuming the hold or saving the grant.
+                scope_replay = existing_pending
+                forward_body = existing_pending.raw_request_blob
+                outcome = None
+            elif expired:
+                # Continue through current-request estimation and all hard/cap
+                # checks. Expired bytes are never replayed.
+                outcome = None
+            else:
+                outcome = resolve_pending(
+                    store=store,
+                    pending=existing_pending,
+                    intent=intent,
+                    tip=tip_directive,
+                    cfg=cfg,
+                    builders={
+                        "cancelled": build_cancelled,
+                        "reprompt": build_reprompt,
+                        "pending_waiting": build_pending_waiting,
+                    },
+                )
+            if outcome is not None:
+                if outcome.kind == "cancel":
+                    approvals.revoke(approval_key)
+                if outcome.kind == "replay" and tip_directive is not None and session_id:
+                    approvals.create(approval_key, tip_directive, held_estimate)
+                _audit(
+                    cfg,
+                    outcome.audit_event or "pending",
+                    session_id,
+                    decision_str=outcome.kind,
+                    reason=f"pending_intent_resolved:{intent.value}",
+                    pending_id=existing_pending.pending_id,
+                    projected_tokens=existing_pending.projected_tokens,
+                    tip=tip_directive,
+                )
+                return outcome
         except ImportError:
             # Fallback before the intent parser lands: subsequent requests
             # during a pending block are themselves blocked with a
@@ -238,7 +359,12 @@ def evaluate(
         within_seconds=30.0,
         session_id=session_id,
     )
-    if recent is not None and recent.status in ("pending", "expired", "discarded"):
+    if (
+        recent is not None
+        and recent.status in ("pending", "expired", "discarded")
+        and tip_directive is None
+        and late_pending is None
+    ):
         _audit(
             cfg,
             "anti_loop_hit",
@@ -259,10 +385,24 @@ def evaluate(
 
     # ── Estimate + decide
     try:
-        est = run_estimate(forward_body, model)
+        est = _estimate_anchored(forward_body, model, session_id)
     except Exception as e:
         _log.warning("spend_guard: estimator failure (passthrough): %s", e)
         return GuardOutcome.passthrough(body)
+
+    if late_pending is not None:
+        from ._context_window import get_model_max_context
+
+        window = get_model_max_context(model)
+        expired_input = late_pending.projected_input_tokens
+        if expired_input is None:
+            expired_input = late_pending.projected_tokens
+        if window and est.projected_input_tokens <= expired_input + window * 0.1:
+            tip_directive = tip_directive or TIPDirective(allow_scope="once")
+        else:
+            earlier_hold_expired = True
+            approvals.remember_reply(approval_key, late_reply_hash)
+            tip_directive = None
 
     # ── Rolling/cumulative caps (2026-05-15 post-incident P0).
     # Records the session→agent mapping for future per-agent lookups,
@@ -335,8 +475,10 @@ def evaluate(
             if breach is not None:
                 # TIP bypass respects existing semantics: [TIP: bypass=on]
                 # or [TIP: allow=once] both let this request through.
-                tip_allowed = tip_directive is not None and (
-                    tip_directive.bypass or tip_directive.allow_scope is not None
+                tip_allowed = (
+                    tip_directive is not None
+                    and (tip_directive.bypass or tip_directive.allow_scope is not None)
+                    and tip_directive.allow_scope not in ("15m", "session")
                 )
                 if not tip_allowed:
                     _audit(
@@ -423,6 +565,27 @@ def evaluate(
         session_running_cost_usd=session_running,
         model_max_context_tokens=model_max_context_tokens,
     )
+    if earlier_hold_expired and decision.decision != "hard_block":
+        decision = PreflightDecision(
+            decision="block", reason="earlier_hold_expired", requires_approval=True, risk=est
+        )
+    elif decision.reason == "projected_exceeds_context_window_percent" and session_id:
+        without_context = decide(
+            est,
+            cfg,
+            session_running_cost_usd=session_running,
+            model_max_context_tokens=model_max_context_tokens,
+            context_soft_approved=True,
+        )
+        if without_context.decision in ("allow", "warn") and approvals.redeem(approval_key, est):
+            decision = without_context
+            _audit(
+                cfg,
+                "context_grant_bypass",
+                session_id,
+                decision_str="allow",
+                projected_tokens=est.projected_input_tokens,
+            )
 
     # ── [TIP: estimate=on] short-circuit (only when allowed by policy)
     if (
@@ -451,6 +614,36 @@ def evaluate(
 
     # ── Allow / warn → forward
     if decision.decision in ("allow", "warn"):
+        if late_pending is not None and not approvals.consume_expired(
+            approval_key, late_pending.pending_id, late_reply_hash
+        ):
+            _cancel_admission()
+            return _held_response(late_pending)
+        if scope_replay is not None:
+            consumed = store.consume(scope_replay.pending_id)
+            if consumed is None:
+                _cancel_admission()
+                return _held_response(scope_replay)
+        if tip_directive is not None and session_id:
+            approvals.create(approval_key, tip_directive, est)
+        if scope_replay is not None:
+            _audit(
+                cfg,
+                "replay",
+                session_id,
+                decision_str="replay",
+                pending_id=scope_replay.pending_id,
+                tip=tip_directive,
+            )
+            return GuardOutcome(
+                kind="replay",
+                body=consumed.raw_request_blob,
+                headers=consumed.raw_request_headers,
+                target_url=consumed.target_url,
+                pending_id=consumed.pending_id,
+                admission_ticket=admission_ticket,
+                audit_event="replay",
+            )
         if decision.decision == "warn":
             _audit(
                 cfg,
@@ -523,7 +716,7 @@ def evaluate(
     try:
         pending = store.store(
             session_id=session_id,
-            body=body,  # store original (pre-TIP-strip) bytes
+            body=forward_body,  # a control directive must never reach the provider on replay
             headers=headers,
             target_url=target_url,
             provider=_provider_from_url(target_url),
@@ -531,6 +724,7 @@ def evaluate(
             projected_tokens=est.projected_input_tokens + est.projected_output_tokens,
             projected_cost_usd=est.projected_cost_usd,
             ttl_seconds=cfg.pending_ttl_seconds,
+            projected_input_tokens=est.projected_input_tokens,
         )
     except Exception as e:
         # The policy already decided BLOCK. A pending-store failure must
@@ -572,9 +766,17 @@ def evaluate(
         projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
         tip=tip_directive,
     )
+    response = build_block(decision, pending)
+    if earlier_hold_expired:
+        payload = json.loads(response)
+        payload["error"]["message"] = (
+            "The earlier hold expired and this request grew by more than 10% of the model context window. Review this new estimate and reply yes to approve this request."
+        )
+        response = json.dumps(payload).encode()
+    store.remember_block_response(pending.pending_id, response)
     return GuardOutcome(
         kind="block",
-        response_body=build_block(decision, pending),
+        response_body=response,
         http_status=402,
         decision=decision,
         pending_id=pending.pending_id,
