@@ -93,15 +93,21 @@ using `previous_response_id` add their supplied input as the suffix.
 ## Approvals during a hold
 
 Every approval, including a bare `yes`, re-checks the request against current
-limits before sending. Approvals lift only the context-percent soft block;
-the context hard stop, configured dollar limits, session cap and rolling caps
-remain binding. An estimator error blocks the request before provider send.
+limits before sending. A one-request approval lifts the context-percent soft
+block, the token soft band used when the model's window is unknown, and the
+opt-in `block_cost_usd` soft band. Context and token hard stops,
+`hard_block_cost_usd`, the session cap and rolling caps remain binding. These
+unliftable blocks return `requires_approval: false`, offer no approval prompt
+and store no hold. An estimator error blocks the request before provider send.
 
 Put a TIP directive at the start of the first text segment in the **latest user
 turn**. This applies to Anthropic messages and Responses input.
 
 - `yes` approves one unexpired held request. The proxy replays its original
   bytes. It does not create a grant for subsequent requests.
+- `[TIP: allow=once]` also replays one unexpired held request. If a different
+  approval scope cannot release a soft band, the original hold remains;
+  another hold is not added.
 - A turn containing only tool results, `<task-notification>` or
   `<system-reminder>` content repeats the original block message and keeps the
   hold. It does not count as a human approval or an ambiguous reply.

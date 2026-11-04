@@ -166,7 +166,7 @@ Prefix any provider-bound prompt with `[TIP: ...]` at the very front of the firs
 
 | Directive | Values | Effect |
 |---|---|---|
-| `allow` | `once` / `15m` / `session` | Approve the context-percent soft block within the current scope; all caps still apply. |
+| `allow` | `once` / `15m` / `session` | `once` releases a held request across context-percent, fallback token and dollar soft bands; persistent grants cover context-percent only. Hard stops, session and rolling caps still apply. |
 | `bypass` | `on` (default if bare) / `off` | Skip the context-percent approval prompt; all caps still apply. |
 | `max` | `$N` (cost USD) / `Nk_tokens` / `Nm_tokens` | Additional approval ceiling; it cannot raise a configured cap. |
 | `estimate` | `on` (default if bare) | Return RiskEstimate JSON, no provider call. |

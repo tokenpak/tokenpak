@@ -736,6 +736,7 @@ def decide(
     session_running_cost_usd: float = 0.0,
     model_max_context_tokens: Optional[int] = None,
     context_soft_approved: bool = False,
+    request_soft_approved: bool = False,
 ) -> PreflightDecision:
     """Compare the estimate to thresholds and return a verdict.
 
@@ -748,12 +749,13 @@ def decide(
        plane is engaged or the model's context window is unknown. Also
        immutable.
     3. Session-cumulative cap, then any TIP-declared ceiling. Approval
-       never lifts a configured cost cap.
+       never lifts the session cap.
     4. **Context-window-% soft block** (canonical) — projected
        input tokens ≥ ``default_context_window_percent`` × max-context.
        Bypassable by Yes/``[TIP: allow=once]``.
     5. Legacy block band — dollar (when engaged) + token-fallback (when
-       context unknown). These remain binding after approval.
+       context unknown). A one-request approval lifts these soft bands;
+       persistent context grants do not.
     6. ``warn`` — advisory only.
     7. ``allow`` — default.
 
@@ -852,7 +854,7 @@ def decide(
             return PreflightDecision(
                 decision="block",
                 reason="session_cumulative_cost_exceeded",
-                requires_approval=True,
+                requires_approval=False,
                 threshold_hit=(
                     f"session_block_cost_usd>={cfg.session_block_cost_usd}"
                     f" running={session_running_cost_usd:.2f}"
@@ -860,8 +862,8 @@ def decide(
                 risk=estimate,
             )
 
-    # Approval lifts only the context-percent soft block. Every configured
-    # cost cap and fallback band remains independent of the approval source.
+    # Persistent grants retain their context-percent scope. One-request
+    # approvals also release the legacy soft bands, after all hard caps.
     context_scope = tip is not None and bool(
         tip.bypass or tip.allow_scope or tip.max_cost_usd is not None or tip.max_tokens is not None
     )
@@ -877,11 +879,18 @@ def decide(
                 risk=estimate,
             )
 
+    request_soft_approved = request_soft_approved or (
+        tip is not None
+        and context_scope
+        and tip.allow_scope not in ("15m", "session")
+        and not (tip.bypass and tip.max_cost_usd is None and tip.max_tokens is None)
+    )
+
     # 4. Context-window-% soft block (canonical).
     if (
         pct_block_tokens is not None
         and input_tokens >= pct_block_tokens
-        and not (context_scope or context_soft_approved)
+        and not (context_scope or context_soft_approved or request_soft_approved)
     ):
         return PreflightDecision(
             decision="block",
@@ -896,7 +905,7 @@ def decide(
         )
 
     # 5b. Legacy dollar block band (opt-in).
-    if cfg.block_cost_usd > 0 and cost >= cfg.block_cost_usd:
+    if cfg.block_cost_usd > 0 and cost >= cfg.block_cost_usd and not request_soft_approved:
         return PreflightDecision(
             decision="block",
             reason="projected_cost_exceeded",
@@ -908,7 +917,7 @@ def decide(
     # 5c. Legacy token-band block — advisory fallback. Engaged only when
     #     the context-window-% basis didn't have a known max-context to
     #     denominate against (otherwise pct_block_tokens above handles it).
-    if pct_block_tokens is None and tokens >= effective_block_tokens:
+    if pct_block_tokens is None and tokens >= effective_block_tokens and not request_soft_approved:
         return PreflightDecision(
             decision="block",
             reason="projected_tokens_exceeded",

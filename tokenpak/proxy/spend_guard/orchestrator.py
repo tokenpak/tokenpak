@@ -454,6 +454,12 @@ def evaluate(
                     kind="block",
                     response_body=build_rolling_cap_block(breach),
                     http_status=402,
+                    decision=PreflightDecision(
+                        decision="block",
+                        reason=f"rolling_cap_breach:{breach.cap_dimension}",
+                        requires_approval=False,
+                        risk=est,
+                    ),
                     audit_event="rolling_cap_block",
                 )
     except ImportError:
@@ -503,8 +509,12 @@ def evaluate(
         session_running_cost_usd=session_running,
         model_max_context_tokens=model_max_context_tokens,
         context_soft_approved=scope_replay is not None,
+        request_soft_approved=scope_replay is not None
+        and (tip_directive is None or tip_directive.allow_scope not in ("15m", "session")),
     )
-    if earlier_hold_expired and decision.decision != "hard_block":
+    if earlier_hold_expired and (
+        decision.decision in ("allow", "warn") or decision.requires_approval
+    ):
         decision = PreflightDecision(
             decision="block", reason="earlier_hold_expired", requires_approval=True, risk=est
         )
@@ -634,6 +644,28 @@ def evaluate(
 
     # ── Block → store pending, return block JSON
     _cancel_admission()  # blocked requests never reach the provider
+    if not decision.requires_approval:
+        _audit(
+            cfg,
+            "block",
+            session_id,
+            decision_str="block",
+            reason=decision.reason,
+            projected_cost=est.projected_cost_usd,
+            projected_tokens=int(est.projected_input_tokens) + int(est.projected_output_tokens),
+            tip=tip_directive,
+        )
+        return GuardOutcome(
+            kind="block",
+            response_body=build_block(decision),
+            http_status=402,
+            decision=decision,
+            audit_event="block",
+        )
+    if scope_replay is not None:
+        # An approval outside this band's scope leaves the original hold
+        # available for a one-request approval, without adding another row.
+        return _held_response(scope_replay)
     if not session_id:
         _audit(
             cfg,
