@@ -28,7 +28,7 @@ def scope_key(session: str, model: str, headers: dict[str, str]) -> str:
 
 
 class ContextApprovals:
-    """State in the existing guard DB, keyed by session/model/fleet/principal."""
+    """State in the existing guard DB, keyed by session/model/deployment/principal."""
 
     def __init__(self, path: Path):
         self.path = path

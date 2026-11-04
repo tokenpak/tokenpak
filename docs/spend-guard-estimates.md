@@ -119,7 +119,7 @@ turn**. This applies to Anthropic messages and Responses input.
 - `[TIP: allow=15m]` grants context-percent approval for 15 minutes.
   `[TIP: allow=session]` grants it for the explicit session ID. These grants
   persist in the existing guard database and are scoped to session, model,
-  fleet and agent. They bypass only the context-percent soft block; hard stops,
+  deployment and agent. They bypass only the context-percent soft block; hard stops,
   other token bands, dollar limits, session limits and rolling caps still apply.
 - Optional `max=Nk_tokens` or `max=$X` limits constrain a persistent grant. The
   dollar allowance is reduced by estimated cost when the grant is used.
@@ -129,7 +129,7 @@ Session grants require a distinct session ID for each new conversation. A
 grant survives a proxy restart and ends when revoked or its limit is exhausted;
 the proxy cannot infer when a client has closed a conversation.
 
-Holds belong to their session, model, fleet and agent scope. A hold in another
+Holds belong to their session, model, deployment and agent scope. A hold in another
 scope does not block the current request. After expiry, new text supersedes
 the hold and receives a fresh evaluation; `no` or `[TIP: cancel]` clears it.
 Late approvals still obey the growth boundary and all current caps. Background
