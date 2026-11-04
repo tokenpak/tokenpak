@@ -39,37 +39,43 @@ def _count_text_tokens(text: str) -> int:
 def _content_tokens(value: Any, model: str, *, anthropic: bool) -> int:
     from .media import document_tokens, image_tokens
 
-    if isinstance(value, str):
-        return _count_text_tokens(value)
-    if isinstance(value, list):
-        return sum(_content_tokens(item, model, anthropic=anthropic) for item in value)
-    if not isinstance(value, dict):
-        return _count_text_tokens(str(value)) if value is not None else 0
-    kind = value.get("type")
-    if kind in ("tool_use", "server_tool_use", "function_call", "custom_tool_call"):
-        # Tool arguments are JSON text, even if they describe an image or
-        # contain a dictionary with type=image. Only content blocks are media.
-        return _count_text_tokens(json.dumps(value, ensure_ascii=False, default=str))
-    if kind in ("image", "input_image", "image_url"):
-        return image_tokens(value, model, anthropic=anthropic)
-    if kind in ("document", "input_file", "file"):
-        source = value.get("source") or {}
-        if isinstance(source, dict) and source.get("type") == "text":
-            return _count_text_tokens(source.get("data") or "")
-        if isinstance(source, dict) and source.get("type") == "content":
-            return _content_tokens(source.get("content"), model, anthropic=anthropic)
-        return document_tokens(value, model, anthropic=anthropic)
-    if kind in ("text", "input_text", "output_text", "summary_text"):
-        return _count_text_tokens(value.get("text") or "")
-    if kind == "thinking":
-        return _count_text_tokens(value.get("thinking") or value.get("text") or "")
-    if kind == "redacted_thinking":
-        return _count_text_tokens(value.get("data") or value.get("text") or "")
-    return sum(
-        _count_text_tokens(str(key)) + _content_tokens(item, model, anthropic=anthropic)
-        for key, item in value.items()
-        if key not in ("cache_control", "signature", "type")
-    )
+    total = 0
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            total += _count_text_tokens(item)
+        elif isinstance(item, list):
+            stack.extend(item)
+        elif not isinstance(item, dict):
+            total += _count_text_tokens(str(item)) if item is not None else 0
+        else:
+            kind = item.get("type")
+            if kind in ("tool_use", "server_tool_use", "function_call", "custom_tool_call"):
+                # Tool arguments are JSON text even when they describe media.
+                total += _count_text_tokens(json.dumps(item, ensure_ascii=False, default=str))
+            elif kind in ("image", "input_image", "image_url"):
+                total += image_tokens(item, model, anthropic=anthropic)
+            elif kind in ("document", "input_file", "file"):
+                source = item.get("source") or {}
+                if isinstance(source, dict) and source.get("type") == "text":
+                    total += _count_text_tokens(source.get("data") or "")
+                elif isinstance(source, dict) and source.get("type") == "content":
+                    stack.append(source.get("content"))
+                else:
+                    total += document_tokens(item, model, anthropic=anthropic)
+            elif kind in ("text", "input_text", "output_text", "summary_text"):
+                total += _count_text_tokens(item.get("text") or "")
+            elif kind == "thinking":
+                total += _count_text_tokens(item.get("thinking") or item.get("text") or "")
+            elif kind == "redacted_thinking":
+                total += _count_text_tokens(item.get("data") or item.get("text") or "")
+            else:
+                for key, child in item.items():
+                    if key not in ("cache_control", "signature", "type"):
+                        total += _count_text_tokens(str(key))
+                        stack.append(child)
+    return total
 
 
 def _walk_anthropic_body(body_json: dict[str, Any], model: str = "") -> tuple[int, int, float]:

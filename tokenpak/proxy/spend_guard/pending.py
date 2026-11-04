@@ -308,22 +308,55 @@ class PendingStore:
         finally:
             conn.close()
 
-    def latest_hold(self, session_id: str) -> Optional[PendingRequest]:
-        """Include the latest expired hold, without reviving older settled holds."""
+    def latest_hold(
+        self,
+        session_id: str,
+        *,
+        model: Optional[str] = None,
+        headers: Optional[dict[str, str]] = None,
+    ) -> Optional[PendingRequest]:
+        """Latest hold in the requested scope, including expiry but not settlement."""
         if not session_id:
             return None
+        from .approvals import scope_key
+
+        key = scope_key(session_id, model, headers or {}) if model is not None else None
         conn = _connect(self.path)
         try:
             _ensure_schema_once(conn, self.path)
-            row = conn.execute(
-                "SELECT * FROM pending_requests WHERE session_id = ? ORDER BY created_at DESC, rowid DESC LIMIT 1",
+            rows = conn.execute(
+                "SELECT * FROM pending_requests WHERE session_id = ? "
+                "ORDER BY created_at DESC, rowid DESC",
                 (session_id,),
-            ).fetchone()
+            )
+            for row in rows:
+                if (
+                    key is not None
+                    and scope_key(session_id, row["model"], json.loads(row["raw_request_headers"]))
+                    != key
+                ):
+                    continue
+                # A settled row fences older holds in this scope.
+                if row["status"] not in ("pending", "expired"):
+                    return None
+                return _row_to_pending(row)
         finally:
             conn.close()
-        if row is None or row["status"] not in ("pending", "expired"):
-            return None
-        return _row_to_pending(row)
+        return None
+
+    def discard_expired(self, session_id: str, *, keep_id: str = "") -> None:
+        """Supersede expired holds without touching another session or active hold."""
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            conn.execute(
+                "UPDATE pending_requests SET status='discarded' WHERE session_id = ? "
+                "AND status IN ('pending', 'expired') AND expires_at <= ? AND pending_id != ?",
+                (session_id, time.time(), keep_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     # -- lookup ------------------------------------------------------------
     def get_by_session(self, session_id: str) -> Optional[PendingRequest]:

@@ -1,6 +1,15 @@
+---
+title: Media estimates and context approvals
+rung: 2
+audience: Developers using Spend Guard in coding agent sessions
+updated: 2026-11-04
+status: current
+---
+
 # Media estimates and context approvals
 
-Spend Guard estimates images from their pixel dimensions and uses the previous
+For developers using long coding agent sessions, Spend Guard estimates images
+from their pixel dimensions and uses the previous
 completed request's provider usage as an input floor. This reduces false blocks
 from large image encodings while keeping the context hard stop in place.
 
@@ -74,12 +83,19 @@ request's anchor. Restarting the proxy clears the cache; it warms on subsequent
 completed requests. Existing held-request storage remains separate.
 
 Matching history prefixes identify appended content without storing history.
+Cache-control markers and their placement do not affect that match. Moving a
+marker never adds the full history to the previous usage again.
 If history is rewritten or compacted, the conservative fallback adds the whole
 current structural estimate to the last observed input. It can overestimate
 until another completed response establishes a new anchor. Responses requests
 using `previous_response_id` add their supplied input as the suffix.
 
 ## Approvals during a hold
+
+Every approval, including a bare `yes`, re-checks the request against current
+limits before sending. Approvals lift only the context-percent soft block;
+the context hard stop, configured dollar limits, session cap and rolling caps
+remain binding. An estimator error blocks the request before provider send.
 
 Put a TIP directive at the start of the first text segment in the **latest user
 turn**. This applies to Anthropic messages and Responses input.
@@ -106,3 +122,9 @@ turn**. This applies to Anthropic messages and Responses input.
 Session grants require a distinct session ID for each new conversation. A
 grant survives a proxy restart and ends when revoked or its limit is exhausted;
 the proxy cannot infer when a client has closed a conversation.
+
+Holds belong to their session, model, fleet and agent scope. A hold in another
+scope does not block the current request. After expiry, new text supersedes
+the hold and receives a fresh evaluation; `no` or `[TIP: cancel]` clears it.
+Late approvals still obey the growth boundary and all current caps. Background
+turns in the same scope continue to re-show the held response.

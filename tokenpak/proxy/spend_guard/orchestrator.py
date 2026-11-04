@@ -150,8 +150,7 @@ def evaluate(
     Failure posture: unmeasurable rolling usage and pending-store write
     failures fail CLOSED (block); anything that still raises out of here
     is converted to a fail-closed 402 by the public ``evaluate`` wrapper
-    in ``__init__.py``. Only the estimator keeps an explicit passthrough
-    (a request we cannot price is forwarded rather than broken).
+    in ``__init__.py``. Estimator failures also block before provider send.
     """
     cfg = config or load_config()
 
@@ -178,7 +177,8 @@ def evaluate(
         from .approvals import ContextApprovals, scope_key
 
         ContextApprovals(store.path).revoke(scope_key(session_id, model, headers))
-        existing = store.get_by_session(session_id)
+        existing = store.latest_hold(session_id, model=model, headers=headers)
+        store.discard_expired(session_id, keep_id=existing.pending_id if existing else "")
         if existing:
             store.discard(existing.pending_id)
             _audit(
@@ -206,7 +206,10 @@ def evaluate(
     store = PendingStore(cfg.audit_db_path)
     # Reconcile stale pending rows (first call in the process + periodic).
     _maybe_expire_pending(store)
-    existing_pending = store.latest_hold(session_id)
+    existing_pending = store.latest_hold(session_id, model=model, headers=headers)
+    store.discard_expired(
+        session_id, keep_id=existing_pending.pending_id if existing_pending else ""
+    )
     from .approvals import ContextApprovals, scope_key
     from .intent import Intent, approval_fingerprint, has_human_text
 
@@ -224,82 +227,43 @@ def evaluate(
             intent = parse_intent(forward_body)
             if not has_human_text(forward_body) and tip_directive is None:
                 return _held_response(existing_pending)
-            if (
-                existing_pending.model != model
-                or scope_key(session_id, model, existing_pending.raw_request_headers)
-                != approval_key
-            ):
-                return _held_response(existing_pending)
             reply_hash = approval_fingerprint(forward_body)
             approving = intent == Intent.POSITIVE or (
                 tip_directive is not None
                 and (tip_directive.allow_scope or tip_directive.bypass)
                 and intent != Intent.NEGATIVE
             )
-            if approving and approvals.reply_used(approval_key, reply_hash):
-                return _held_response(existing_pending)
             expired = existing_pending.expires_at <= time.time()
+            if approving and approvals.reply_used(approval_key, reply_hash):
+                if not expired:
+                    return _held_response(existing_pending)
+                # A used reply cannot authorize another send, but it must
+                # not pin an expired hold forever either.
+                approving = False
+                tip_directive = None
             if expired and approving:
                 late_pending = existing_pending
                 late_reply_hash = reply_hash
             elif expired:
+                store.discard(existing_pending.pending_id)
                 if intent == Intent.NEGATIVE:
                     approvals.revoke(approval_key)
-                    store.discard(existing_pending.pending_id)
                     return GuardOutcome(
                         kind="cancel",
                         response_body=build_cancelled(existing_pending),
                         pending_id=existing_pending.pending_id,
                         audit_event="cancel",
                     )
-                return _held_response(existing_pending)
-            if not expired and (
-                intent == Intent.POSITIVE
-                or (
-                    tip_directive is not None
-                    and (tip_directive.allow_scope or tip_directive.bypass)
-                )
-            ):
-                from ._context_window import get_model_max_context
-
-                held_estimate = _estimate_anchored(
-                    existing_pending.raw_request_blob, model, session_id
-                )
-                held_decision = decide(
-                    held_estimate,
-                    cfg,
-                    tip=tip_directive,
-                    model_max_context_tokens=get_model_max_context(model),
-                )
-                if held_decision.decision == "hard_block":
-                    return GuardOutcome(
-                        kind="hard_block",
-                        response_body=build_hard_block(held_decision),
-                        http_status=402,
-                        decision=held_decision,
-                    )
-                if (
-                    tip_directive is not None
-                    and tip_directive.allow_scope in ("15m", "session")
-                    and held_decision.decision == "block"
-                ):
-                    return _held_response(existing_pending)
-            if (
-                not expired
-                and approving
-                and tip_directive is not None
-                and tip_directive.allow_scope in ("15m", "session")
-            ):
-                # Persistent grants authorize only the context-percent band.
-                # Evaluate the held bytes through rolling and session caps
-                # before consuming the hold or saving the grant.
+                # A new human request supersedes an expired hold and is
+                # evaluated normally; it does not inherit any approval.
+            if not expired and approving:
+                # All replay approvals use the same estimation and cap path
+                # as fresh requests before consuming the held bytes.
                 scope_replay = existing_pending
                 forward_body = existing_pending.raw_request_blob
                 outcome = None
             elif expired:
-                # Continue through current-request estimation and all hard/cap
-                # checks. Expired bytes are never replayed.
-                outcome = None
+                outcome = None  # Expired bytes are never replayed.
             else:
                 outcome = resolve_pending(
                     store=store,
@@ -316,8 +280,6 @@ def evaluate(
             if outcome is not None:
                 if outcome.kind == "cancel":
                     approvals.revoke(approval_key)
-                if outcome.kind == "replay" and tip_directive is not None and session_id:
-                    approvals.create(approval_key, tip_directive, held_estimate)
                 _audit(
                     cfg,
                     outcome.audit_event or "pending",
@@ -362,8 +324,11 @@ def evaluate(
     if (
         recent is not None
         and recent.status in ("pending", "expired", "discarded")
+        and recent.expires_at > time.time()
+        and scope_key(session_id, recent.model, recent.raw_request_headers) == approval_key
         and tip_directive is None
         and late_pending is None
+        and scope_replay is None
     ):
         _audit(
             cfg,
@@ -387,8 +352,10 @@ def evaluate(
     try:
         est = _estimate_anchored(forward_body, model, session_id)
     except Exception as e:
-        _log.warning("spend_guard: estimator failure (passthrough): %s", e)
-        return GuardOutcome.passthrough(body)
+        from . import _fail_closed_outcome
+
+        _log.warning("spend_guard: estimator failure (blocked): %s", type(e).__name__)
+        return _fail_closed_outcome(e)
 
     if late_pending is not None:
         from ._context_window import get_model_max_context
@@ -408,7 +375,7 @@ def evaluate(
     # Records the session→agent mapping for future per-agent lookups,
     # then evaluates per-agent and per-fleet rolling caps. If any cap
     # would be exceeded by this request's projected cost, return a
-    # block (respect TIP bypass directives). Per-session caps continue
+    # block regardless of approval. Per-session caps continue
     # to evaluate downstream — rolling caps SUPPLEMENT them.
     #
     # Admission accounting: when the cap check passes, the request's
@@ -434,7 +401,6 @@ def evaluate(
         from .block_response import build_rolling_cap_block
         from .rolling_caps import (
             RollingCapsConfig,
-            admit_pending_spend,
             check_rolling_caps_and_admit,
             record_session_agent,
         )
@@ -473,51 +439,23 @@ def evaluate(
                 config=rc_cfg,
             )
             if breach is not None:
-                # TIP bypass respects existing semantics: [TIP: bypass=on]
-                # or [TIP: allow=once] both let this request through.
-                tip_allowed = (
-                    tip_directive is not None
-                    and (tip_directive.bypass or tip_directive.allow_scope is not None)
-                    and tip_directive.allow_scope not in ("15m", "session")
+                _audit(
+                    cfg,
+                    "rolling_cap_block",
+                    session_id,
+                    decision_str="rolling_cap_block",
+                    reason=f"rolling_cap_breach:{breach.cap_dimension}",
+                    projected_cost=est.projected_cost_usd,
+                    projected_tokens=int(est.projected_input_tokens)
+                    + int(est.projected_output_tokens),
+                    tip=tip_directive,
                 )
-                if not tip_allowed:
-                    _audit(
-                        cfg,
-                        "rolling_cap_block",
-                        session_id,
-                        decision_str="rolling_cap_block",
-                        reason=f"rolling_cap_breach:{breach.cap_dimension}",
-                        projected_cost=est.projected_cost_usd,
-                        projected_tokens=int(est.projected_input_tokens)
-                        + int(est.projected_output_tokens),
-                        tip=tip_directive,
-                    )
-                    return GuardOutcome(
-                        kind="block",
-                        response_body=build_rolling_cap_block(breach),
-                        http_status=402,
-                        audit_event="rolling_cap_block",
-                    )
-                else:
-                    _audit(
-                        cfg,
-                        "rolling_cap_tip_bypass",
-                        session_id,
-                        decision_str="allow",
-                        reason=f"rolling_cap_breach_tip_bypassed:{breach.cap_dimension}",
-                        projected_cost=est.projected_cost_usd,
-                        projected_tokens=int(est.projected_input_tokens)
-                        + int(est.projected_output_tokens),
-                        tip=tip_directive,
-                    )
-                    # TIP-authorized forward still spends — track it so
-                    # concurrent checks see the in-flight cost.
-                    admission_ticket = admit_pending_spend(
-                        agent_id,
-                        float(est.projected_cost_usd),
-                        int(est.projected_input_tokens) + int(est.projected_output_tokens),
-                        projected_cache_read,
-                    )
+                return GuardOutcome(
+                    kind="block",
+                    response_body=build_rolling_cap_block(breach),
+                    http_status=402,
+                    audit_event="rolling_cap_block",
+                )
     except ImportError:
         # rolling_caps module not yet installed — skip silently
         pass
@@ -564,6 +502,7 @@ def evaluate(
         tip=tip_directive,
         session_running_cost_usd=session_running,
         model_max_context_tokens=model_max_context_tokens,
+        context_soft_approved=scope_replay is not None,
     )
     if earlier_hold_expired and decision.decision != "hard_block":
         decision = PreflightDecision(

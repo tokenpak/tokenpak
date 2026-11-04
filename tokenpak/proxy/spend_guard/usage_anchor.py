@@ -27,9 +27,25 @@ _ANCHORS: OrderedDict[tuple[str, str], UsageAnchor] = OrderedDict()
 
 
 def _digest(value: object) -> bytes:
-    return hashlib.sha256(
-        json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-    ).digest()
+    # Hash the content tree, not volatile cache placement. An iterative walk
+    # also avoids making the usage floor depend on Python's recursion limit.
+    digest = hashlib.sha256()
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, dict):
+            keys = sorted(key for key in item if key != "cache_control")
+            digest.update(f"d{len(keys)}:".encode())
+            for key in reversed(keys):
+                stack.extend((item[key], key))
+        elif isinstance(item, list):
+            digest.update(f"l{len(item)}:".encode())
+            stack.extend(reversed(item))
+        else:
+            encoded = json.dumps(item, separators=(",", ":")).encode()
+            digest.update(f"v{len(encoded)}:".encode())
+            digest.update(encoded)
+    return digest.digest()
 
 
 def _shape(body: bytes) -> tuple[dict[str, Any], str, list[Any]]:

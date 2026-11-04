@@ -10,7 +10,7 @@ import pytest
 
 from tokenpak.proxy.request_pipeline import _resolve_session_id
 from tokenpak.proxy.spend_guard import orchestrator
-from tokenpak.proxy.spend_guard.contracts import PreflightDecision, RiskEstimate
+from tokenpak.proxy.spend_guard.contracts import RiskEstimate
 from tokenpak.proxy.spend_guard.intent import Intent, parse_intent
 from tokenpak.proxy.spend_guard.pending import PendingStore
 from tokenpak.proxy.spend_guard.policy import SpendGuardConfig
@@ -170,15 +170,12 @@ def _force_block(monkeypatch) -> None:
         cache_hit_ratio=0.0,
         rates={},
     )
-    decision = PreflightDecision(
-        decision="block",
-        reason="projected_tokens_exceeded",
-        requires_approval=True,
-        threshold_hit="block_tokens",
-        risk=estimate,
-    )
     monkeypatch.setattr(orchestrator, "run_estimate", lambda _body, _model: estimate)
-    monkeypatch.setattr(orchestrator, "decide", lambda *_args, **_kwargs: decision)
+    # Keep real policy evaluation: approvals now re-check every configured
+    # cap, so an unconditional BLOCK stub cannot model an approvable hold.
+    monkeypatch.setattr(
+        "tokenpak.proxy.spend_guard._context_window.get_model_max_context", lambda _model: 580_000
+    )
     monkeypatch.setattr(orchestrator, "_LAST_EXPIRE_SWEEP", 0.0)
 
 

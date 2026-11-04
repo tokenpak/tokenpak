@@ -166,9 +166,9 @@ Prefix any provider-bound prompt with `[TIP: ...]` at the very front of the firs
 
 | Directive | Values | Effect |
 |---|---|---|
-| `allow` | `once` / `15m` / `session` | Authorize replay of any held pending request. |
-| `bypass` | `on` (default if bare) / `off` | Skip Yes/No prompt; still subject to hard-block. |
-| `max` | `$N` (cost USD) / `Nk_tokens` / `Nm_tokens` | Per-request ceiling the directive authorizes. Unspecified dimensions are treated as user-authorized. |
+| `allow` | `once` / `15m` / `session` | Approve the context-percent soft block within the current scope; all caps still apply. |
+| `bypass` | `on` (default if bare) / `off` | Skip the context-percent approval prompt; all caps still apply. |
+| `max` | `$N` (cost USD) / `Nk_tokens` / `Nm_tokens` | Additional approval ceiling; it cannot raise a configured cap. |
 | `estimate` | `on` (default if bare) | Return RiskEstimate JSON, no provider call. |
 | `cancel` | `on` (default if bare) | Discard any pending request for this session. |
 | `reason` | `"free text"` | Annotation written to the audit log. |

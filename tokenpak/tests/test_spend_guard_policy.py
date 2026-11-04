@@ -662,7 +662,7 @@ class TestTIPDirectiveWithDollarPlane:
         )
         return cfg
 
-    def test_tip_allow_once_within_dollar_ceiling(self):
+    def test_tip_allow_once_cannot_raise_configured_dollar_cap(self):
         cfg = self._dollar_cfg()
         tip = TIPDirective(allow_scope="once", max_cost_usd=15.0)
         d = decide(
@@ -671,8 +671,8 @@ class TestTIPDirectiveWithDollarPlane:
             tip=tip,
             model_max_context_tokens=200_000,
         )
-        assert d.decision == "allow"
-        assert d.threshold_hit == "tip_directive"
+        assert d.decision == "block"
+        assert d.reason == "projected_cost_exceeded"
 
     def test_tip_ceiling_too_low(self):
         cfg = self._dollar_cfg()
