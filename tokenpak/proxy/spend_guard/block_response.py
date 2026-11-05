@@ -67,8 +67,8 @@ HTTP_REPROMPT = 402
 HTTP_ESTIMATE = 200
 
 
-def block(decision: PreflightDecision, pending: PendingRequest) -> bytes:
-    """Initial block response — caller should approve via Yes/[TIP] or cancel."""
+def block(decision: PreflightDecision, pending: PendingRequest | None = None) -> bytes:
+    """Describe a block, offering approval only when it can release the request."""
     risk = decision.risk
     payload = {
         "error": {
@@ -77,6 +77,12 @@ def block(decision: PreflightDecision, pending: PendingRequest) -> bytes:
                 "TIP Spend Guard blocked this request before provider send. "
                 "Reply 'yes' to proceed, 'no' to cancel, or prepend "
                 "'[TIP: allow=once]' to bypass."
+            )
+            if decision.requires_approval
+            else (
+                "TIP Spend Guard blocked this request before provider send. "
+                "The configured limit cannot be overridden by approval. "
+                "Reduce the request or wait for usage to fall below the limit."
             ),
             "reason": decision.reason,
             "threshold_hit": decision.threshold_hit,
@@ -85,11 +91,14 @@ def block(decision: PreflightDecision, pending: PendingRequest) -> bytes:
             "projected_cost_usd": risk.projected_cost_usd if risk else None,
             "cache_hit_ratio": risk.cache_hit_ratio if risk else None,
             "model": risk.model if risk else None,
-            "pending_id": pending.pending_id,
-            "expires_at": pending.expires_at,
-            "approval_prompt": "Proceed? Yes / No",
-            "retryable": True,  # client may retry after approval
-            "recovery_status": "user_action_required",
+            "pending_id": pending.pending_id if pending else None,
+            "expires_at": pending.expires_at if pending else None,
+            "requires_approval": decision.requires_approval,
+            "approval_prompt": "Proceed? Yes / No" if decision.requires_approval else None,
+            "retryable": decision.requires_approval,
+            "recovery_status": "user_action_required"
+            if decision.requires_approval
+            else "operator_action_required",
         }
     }
     return json.dumps(payload).encode()
@@ -112,6 +121,7 @@ def hard_block(decision: PreflightDecision) -> bytes:
             "projected_cost_usd": risk.projected_cost_usd if risk else None,
             "model": risk.model if risk else None,
             "retryable": False,
+            "requires_approval": False,
             "recovery_status": "terminally_blocked",
         }
     }
@@ -295,16 +305,15 @@ def build_rolling_cap_block(breach: CapBreach) -> bytes:
             "TIP Spend Guard blocked this request: rolling_cap_unmeasurable. "
             f"{attribution} "
             "Operator action required: repair (or remove) the usage database "
-            "so rolling usage can be measured again. Prepend "
-            "'[TIP: allow=once]' only as an explicit operator-approved bypass."
+            "so rolling usage can be measured again. "
+            "Approval cannot override this block."
         )
     else:
         message = (
             f"TIP Spend Guard rolling cap exceeded: {breach.cap_dimension} [{scope}]. "
             f"{attribution} "
-            "Reply 'yes' or prepend '[TIP: allow=once]' to bypass; "
-            "wait ~30 min for usage to age out, or operator may raise "
-            "the cap in spend_guard.rolling_caps."
+            "Approval cannot override this cap. Wait for usage to age out "
+            "of the rolling window or reduce the request."
         )
     payload = {
         "error": {
@@ -323,7 +332,8 @@ def build_rolling_cap_block(breach: CapBreach) -> bytes:
             "cap": breach.cap,
             "projected_add": breach.projected_add,
             "retry_after_seconds": breach.retry_after_seconds,
-            "bypass_directive": "[TIP: allow=once]",
+            "bypass_directive": None,
+            "requires_approval": False,
         }
     }
     # Optional per-agent breakdown — included only when the breach carries it

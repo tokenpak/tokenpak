@@ -85,7 +85,15 @@ def test_monitor_snapshot_covers_runtime_schema_owners(snapshot: dict) -> None:
 def test_shared_spend_guard_store_contains_both_owned_schemas(snapshot: dict) -> None:
     spend_guard = _store(snapshot, "~/.tokenpak/spend_guard.db")
     object_names = {obj["name"] for obj in spend_guard["ddl"]["objects"]}
-    assert {"pending_requests", "spend_guard_audit"} <= object_names
+    assert {
+        "pending_requests",
+        "spend_guard_audit",
+        "context_approvals",
+        "expired_approval_uses",
+    } <= object_names
+    pending_sql = _object_sql(spend_guard, object_type="table", name="pending_requests")
+    assert "projected_input_tokens INTEGER" in pending_sql
+    assert "block_response BLOB" in pending_sql
 
 
 def test_build_snapshot_is_ddl_deterministic(snapshot: dict) -> None:

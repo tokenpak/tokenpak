@@ -4,9 +4,8 @@
 Single source of truth for pricing is :mod:`tokenpak.models` — we never
 duplicate the rate map (``feedback_always_dynamic``).
 
-Token estimation is intentionally cheap (char//4 heuristic on the JSON body
-plus an Anthropic-shaped messages walk to find the cached/uncached split).
-The estimator runs on every inbound request, so it must stay sub-millisecond.
+Text retains a cheap character heuristic. Media uses bounded header decoding
+and provider sizing rules; provider usage can supply a higher input floor.
 """
 
 from __future__ import annotations
@@ -37,7 +36,49 @@ def _count_text_tokens(text: str) -> int:
     return max(1, len(text) // _CHARS_PER_TOKEN)
 
 
-def _walk_anthropic_body(body_json: dict[str, Any]) -> tuple[int, int, float]:
+def _content_tokens(value: Any, model: str, *, anthropic: bool) -> int:
+    from .media import document_tokens, image_tokens
+
+    total = 0
+    stack = [value]
+    while stack:
+        item = stack.pop()
+        if isinstance(item, str):
+            total += _count_text_tokens(item)
+        elif isinstance(item, list):
+            stack.extend(item)
+        elif not isinstance(item, dict):
+            total += _count_text_tokens(str(item)) if item is not None else 0
+        else:
+            kind = item.get("type")
+            if kind in ("tool_use", "server_tool_use", "function_call", "custom_tool_call"):
+                # Tool arguments are JSON text even when they describe media.
+                total += _count_text_tokens(json.dumps(item, ensure_ascii=False, default=str))
+            elif kind in ("image", "input_image", "image_url"):
+                total += image_tokens(item, model, anthropic=anthropic)
+            elif kind in ("document", "input_file", "file"):
+                source = item.get("source") or {}
+                if isinstance(source, dict) and source.get("type") == "text":
+                    total += _count_text_tokens(source.get("data") or "")
+                elif isinstance(source, dict) and source.get("type") == "content":
+                    stack.append(source.get("content"))
+                else:
+                    total += document_tokens(item, model, anthropic=anthropic)
+            elif kind in ("text", "input_text", "output_text", "summary_text"):
+                total += _count_text_tokens(item.get("text") or "")
+            elif kind == "thinking":
+                total += _count_text_tokens(item.get("thinking") or item.get("text") or "")
+            elif kind == "redacted_thinking":
+                total += _count_text_tokens(item.get("data") or item.get("text") or "")
+            else:
+                for key, child in item.items():
+                    if key not in ("cache_control", "signature", "type"):
+                        total += _count_text_tokens(str(key))
+                        stack.append(child)
+    return total
+
+
+def _walk_anthropic_body(body_json: dict[str, Any], model: str = "") -> tuple[int, int, float]:
     """Walk an Anthropic ``/v1/messages`` body.
 
     Returns ``(current_context_tokens, request_tokens, cache_hit_ratio)``:
@@ -85,12 +126,7 @@ def _walk_anthropic_body(body_json: dict[str, Any]) -> tuple[int, int, float]:
         for blk in content:
             if not isinstance(blk, dict):
                 continue
-            txt = blk.get("text", "") or ""
-            # Tool result / image / other blocks — count their text bag.
-            if not txt:
-                # tool_use input/output blocks live in JSON form
-                txt = json.dumps(blk.get("input") or blk.get("content") or "", default=str)
-            n = _count_text_tokens(txt)
+            n = _content_tokens(blk, model or str(body_json.get("model") or ""), anthropic=True)
             if blk.get("cache_control"):
                 cached += n
             else:
@@ -100,13 +136,29 @@ def _walk_anthropic_body(body_json: dict[str, Any]) -> tuple[int, int, float]:
     tools = body_json.get("tools") or []
     if isinstance(tools, list) and tools:
         # Tools are stable across a session — almost always cached.
-        cached += _count_text_tokens(json.dumps(tools, default=str))
+        cached += _count_text_tokens(json.dumps(tools, ensure_ascii=False, default=str))
 
     total = cached + fresh
     if total == 0:
         return 0, 0, 0.0
     ratio = cached / total
     return cached, fresh, ratio
+
+
+def structural_tokens(body_json: dict[str, Any], model: str) -> tuple[int, int, int]:
+    """Return total/cached/fresh input, excluding transport and output controls."""
+    if "messages" in body_json:
+        cached, fresh, _ = _walk_anthropic_body(body_json, model)
+    else:
+        cached = _content_tokens(body_json.get("instructions"), model, anthropic=False)
+        if body_json.get("tools"):
+            cached += _count_text_tokens(
+                json.dumps(body_json["tools"], ensure_ascii=False, default=str)
+            )
+        fresh = _content_tokens(body_json.get("input"), model, anthropic=False)
+        if "input" not in body_json:
+            fresh += _content_tokens(body_json.get("prompt"), model, anthropic=False)
+    return cached + fresh, cached, fresh
 
 
 def estimate(
@@ -124,8 +176,8 @@ def estimate(
     model : str
         Resolved model id (e.g. ``claude-opus-4-7``).
     fallback_session_tokens : int
-        If we can't parse the body, use this as a floor for context size.
-        Typically the proxy's last-known cache_read for this session.
+        Provider total input plus the structural appended suffix, bound by
+        the caller to this session and model. Applies even to valid JSON.
     """
     # Pricing — always dynamic (per ``feedback_always_dynamic``)
     try:
@@ -143,21 +195,30 @@ def estimate(
     try:
         body_text = body.decode("utf-8", errors="replace")
         body_json = json.loads(body_text)
+        if not isinstance(body_json, dict):
+            body_json = {}
     except Exception:
         body_json = {}
 
-    if body_json and "messages" in body_json:
-        cached, fresh, hit_ratio = _walk_anthropic_body(body_json)
+    if body_json:
+        _, cached, fresh = structural_tokens(body_json, model)
     else:
         # Unknown shape — fall back to whole-body fresh.
         total = _count_text_tokens(body_text)
-        cached = max(0, fallback_session_tokens)
+        cached = 0
         fresh = total
         denom = cached + fresh
         hit_ratio = (cached / denom) if denom else 0.0
 
-    projected_input = cached + fresh
-    projected_output = int(body_json.get("max_tokens") or _DEFAULT_OUTPUT_TOKENS)
+    projected_input = max(cached + fresh, max(0, fallback_session_tokens))
+    fresh = projected_input - cached
+    hit_ratio = cached / projected_input if projected_input else 0.0
+    projected_output = int(
+        body_json.get("max_tokens")
+        or body_json.get("max_output_tokens")
+        or body_json.get("max_completion_tokens")
+        or _DEFAULT_OUTPUT_TOKENS
+    )
 
     # Cost components: cached input gets the ``cached`` rate (~10% of input),
     # fresh input gets full input rate, output gets output rate.

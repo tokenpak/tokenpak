@@ -77,6 +77,7 @@ def _materialize_telemetry(db_path: Path) -> None:
 
 
 def _materialize_spend_guard(db_path: Path) -> None:
+    from tokenpak.proxy.spend_guard.approvals import ContextApprovals
     from tokenpak.proxy.spend_guard.audit import query_recent
     from tokenpak.proxy.spend_guard.pending import (
         PendingStore,
@@ -89,6 +90,7 @@ def _materialize_spend_guard(db_path: Path) -> None:
     reset_schema_cache_for_testing()
     try:
         PendingStore(str(db_path)).get_by_session("__snapshot__")
+        ContextApprovals(db_path)
         query_recent(str(db_path), limit=1)
         with sqlite3.connect(db_path) as conn:
             reservation_schema(conn)

@@ -72,7 +72,8 @@ def test_fleet_breach_structured_fields():
     assert err["used"] == 60.15
     assert err["cap"] == 60.0
     assert err["projected_add"] == 0.524
-    assert err["bypass_directive"] == "[TIP: allow=once]"
+    assert err["bypass_directive"] is None
+    assert err["requires_approval"] is False
 
 
 def test_agent_breach_keeps_spender_semantics():

@@ -5,8 +5,8 @@ Grammar (v1):
 
     [TIP: <key>(=<value>)?( <key>(=<value>)?)*]
 
-The header MUST appear at the very front of the FIRST user-text segment of
-the request body (after optional leading whitespace). Mid-sentence tokens
+The header MUST appear at the very front of the first text segment in the
+latest user turn (after optional leading whitespace). Mid-sentence tokens
 are NOT directives — they're content the model should see.
 
 This module is the single source of truth for the v1 directive vocabulary.
@@ -158,7 +158,7 @@ def parse_tip_header(text: str) -> tuple[Optional[TIPDirective], str]:
 
 
 def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], bytes]:
-    """Strip a leading ``[TIP: ...]`` from the FIRST user-text segment.
+    """Strip a leading ``[TIP: ...]`` from the latest user's first text segment.
 
     Operates on parsed Anthropic ``/v1/messages`` and OpenAI Responses
     ``/v1/responses`` request shapes. For other shapes, attempts a
@@ -185,8 +185,9 @@ def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], byt
     if not isinstance(msgs, list):
         msgs = []
 
-    # Find the first user message and mutate its content.
-    for msg in msgs:
+    # The actionable directive is on the latest user turn. Within that
+    # turn only the first text segment is a directive surface.
+    for msg in reversed(msgs):
         if not isinstance(msg, dict) or msg.get("role") != "user":
             continue
         content = msg.get("content")
@@ -204,7 +205,7 @@ def parse_and_strip_tip_header(body: bytes) -> tuple[Optional[TIPDirective], byt
                         return None, body
                     blk["text"] = rem
                     return d, json.dumps(body_json).encode("utf-8")
-        # Only inspect the first user message.
+        # Only inspect the latest user message.
         break
 
     # OpenAI Responses API: inspect and strip the first user-text segment.

@@ -52,7 +52,7 @@ def resolve_pending(
     """
     # TIP-driven allow-once / bypass: take precedence over text intent. The
     # caller is explicitly authorizing a replay.
-    tip_authorizes = tip is not None and (tip.allow_scope == "once" or tip.bypass)
+    tip_authorizes = tip is not None and (tip.allow_scope is not None or tip.bypass)
     if tip_authorizes and intent != Intent.NEGATIVE:
         consumed = store.consume(pending.pending_id)
         if consumed is None:

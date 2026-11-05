@@ -158,6 +158,10 @@ def _ensure_schema(conn: sqlite3.Connection) -> None:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_pending_hash ON pending_requests(request_hash, status)"
     )
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(pending_requests)")}
+    for name, kind in (("projected_input_tokens", "INTEGER"), ("block_response", "BLOB")):
+        if name not in columns:
+            conn.execute(f"ALTER TABLE pending_requests ADD COLUMN {name} {kind}")
     # One-time migration: redact credential headers from any rows written by
     # an older build that persisted raw headers (raw credential-on-disk
     # exposure). Gated by PRAGMA user_version so it runs exactly once per db;
@@ -227,6 +231,7 @@ class PendingStore:
         projected_tokens: int,
         projected_cost_usd: float,
         ttl_seconds: int = 600,
+        projected_input_tokens: Optional[int] = None,
     ) -> PendingRequest:
         """Insert a new pending request and return it."""
         if not session_id:
@@ -252,8 +257,8 @@ class PendingStore:
                        (pending_id, session_id, created_at, expires_at,
                         request_hash, provider, model, projected_tokens,
                         projected_cost_usd, raw_request_blob,
-                        raw_request_headers, target_url, status)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
+                        raw_request_headers, target_url, projected_input_tokens, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
                 (
                     pending_id,
                     session_id,
@@ -267,6 +272,7 @@ class PendingStore:
                     blob,
                     headers_json,
                     target_url,
+                    projected_input_tokens,
                 ),
             )
             conn.commit()
@@ -287,7 +293,70 @@ class PendingStore:
             raw_request_headers=safe_headers,
             target_url=target_url,
             status="pending",
+            projected_input_tokens=projected_input_tokens,
         )
+
+    def remember_block_response(self, pending_id: str, response: bytes) -> None:
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            conn.execute(
+                "UPDATE pending_requests SET block_response = ? WHERE pending_id = ?",
+                (response, pending_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
+
+    def latest_hold(
+        self,
+        session_id: str,
+        *,
+        model: Optional[str] = None,
+        headers: Optional[dict[str, str]] = None,
+    ) -> Optional[PendingRequest]:
+        """Latest hold in the requested scope, including expiry but not settlement."""
+        if not session_id:
+            return None
+        from .approvals import scope_key
+
+        key = scope_key(session_id, model, headers or {}) if model is not None else None
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            rows = conn.execute(
+                "SELECT * FROM pending_requests WHERE session_id = ? "
+                "ORDER BY created_at DESC, rowid DESC",
+                (session_id,),
+            )
+            for row in rows:
+                if (
+                    key is not None
+                    and scope_key(session_id, row["model"], json.loads(row["raw_request_headers"]))
+                    != key
+                ):
+                    continue
+                # A settled row fences older holds in this scope.
+                if row["status"] not in ("pending", "expired"):
+                    return None
+                return _row_to_pending(row)
+        finally:
+            conn.close()
+        return None
+
+    def discard_expired(self, session_id: str, *, keep_id: str = "") -> None:
+        """Supersede expired holds without touching another session or active hold."""
+        conn = _connect(self.path)
+        try:
+            _ensure_schema_once(conn, self.path)
+            conn.execute(
+                "UPDATE pending_requests SET status='discarded' WHERE session_id = ? "
+                "AND status IN ('pending', 'expired') AND expires_at <= ? AND pending_id != ?",
+                (session_id, time.time(), keep_id),
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     # -- lookup ------------------------------------------------------------
     def get_by_session(self, session_id: str) -> Optional[PendingRequest]:
@@ -381,7 +450,7 @@ class PendingStore:
             _ensure_schema_once(conn, self.path)
             cur = conn.execute(
                 "UPDATE pending_requests SET status='discarded' "
-                "WHERE pending_id = ? AND status = 'pending'",
+                "WHERE pending_id = ? AND status IN ('pending', 'expired')",
                 (pending_id,),
             )
             conn.commit()
@@ -420,4 +489,6 @@ def _row_to_pending(row: sqlite3.Row) -> PendingRequest:
         raw_request_headers=json.loads(row["raw_request_headers"] or "{}"),
         target_url=row["target_url"],
         status=row["status"],
+        projected_input_tokens=row["projected_input_tokens"],
+        block_response=row["block_response"],
     )
