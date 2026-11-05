@@ -178,6 +178,10 @@ def evaluate(
 
         ContextApprovals(store.path).revoke(scope_key(session_id, model, headers))
         existing = store.latest_hold(session_id, model=model, headers=headers)
+        if existing is None:
+            # Legacy holds lack caller scope. They can be cancelled within
+            # their session/model, but must never grant a scoped approval.
+            existing = store.latest_hold(session_id, model=model, headers={})
         store.discard_expired(session_id, keep_id=existing.pending_id if existing else "")
         if existing:
             store.discard(existing.pending_id)
@@ -207,11 +211,14 @@ def evaluate(
     # Reconcile stale pending rows (first call in the process + periodic).
     _maybe_expire_pending(store)
     existing_pending = store.latest_hold(session_id, model=model, headers=headers)
+    from .intent import Intent, approval_fingerprint, has_human_text, parse_intent
+
+    if existing_pending is None and parse_intent(forward_body) == Intent.NEGATIVE:
+        existing_pending = store.latest_hold(session_id, model=model, headers={})
     store.discard_expired(
         session_id, keep_id=existing_pending.pending_id if existing_pending else ""
     )
     from .approvals import ContextApprovals, scope_key
-    from .intent import Intent, approval_fingerprint, has_human_text
 
     approvals = ContextApprovals(store.path)
     approval_key = scope_key(session_id, model, headers)
@@ -221,7 +228,6 @@ def evaluate(
     earlier_hold_expired = False
     if existing_pending is not None:
         try:
-            from .intent import parse_intent
             from .replay import resolve_pending
 
             intent = parse_intent(forward_body)
@@ -251,6 +257,7 @@ def evaluate(
                     return GuardOutcome(
                         kind="cancel",
                         response_body=build_cancelled(existing_pending),
+                        http_status=200,
                         pending_id=existing_pending.pending_id,
                         audit_event="cancel",
                     )

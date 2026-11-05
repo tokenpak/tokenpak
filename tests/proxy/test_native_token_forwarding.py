@@ -689,3 +689,66 @@ def test_cancel_pending_token_request_does_not_mark_provider_failure(domain):
     assert registry.all_statuses()["anthropic"]["total_failures"] == 0
     with sqlite3.connect(domain[1]) as conn:
         assert conn.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0
+
+
+@pytest.mark.parametrize("text", ["[TIP: cancel] synthetic work", "no"])
+@pytest.mark.parametrize("expired", [False, True])
+@pytest.mark.parametrize("legacy", [False, True])
+@pytest.mark.parametrize("failure", ["estimator", "reservation"])
+def test_pending_cancellation_never_admits_a_provider_request(
+    domain, monkeypatch, text, expired, legacy, failure
+):
+    """Regression: cancellation resolves before admission, even for legacy holds."""
+    from tokenpak.proxy.spend_guard import orchestrator
+    from tokenpak.proxy.spend_guard.pending import PendingStore
+    from tokenpak.proxy.spend_guard.reservation import ReservationStore, ReservationUnavailable
+
+    from .spend_guard.native_text_fixtures import BETA, native_text_body
+
+    body = native_text_body(max_tokens=16)
+    pending = PendingStore(str(domain[1]))
+    held = pending.store(
+        session_id="session-a",
+        body=json.dumps(body).encode(),
+        headers={} if legacy else {"X-TokenPak-Agent": "agent-a"},
+        target_url=URL,
+        provider="anthropic",
+        model=MODEL,
+        projected_tokens=16,
+        projected_cost_usd=0,
+    )
+    if expired:
+        with sqlite3.connect(domain[1]) as conn:
+            conn.execute(
+                "UPDATE pending_requests SET expires_at=0 WHERE pending_id=?", (held.pending_id,)
+            )
+    calls = []
+
+    def unavailable(*args, **kwargs):
+        calls.append(failure)
+        raise ReservationUnavailable("synthetic admission failure")
+
+    if failure == "estimator":
+        monkeypatch.setattr(orchestrator, "run_estimate", unavailable)
+    else:
+        monkeypatch.setattr(ReservationStore, "reserve", unavailable)
+    registry = breaker_module.get_circuit_breaker_registry()
+    registry.get_state("anthropic")
+    body["messages"][0]["content"] = [{"type": "text", "text": text}]
+    headers = {"anthropic-beta": BETA, "X-Claude-Code-Session-Id": "session-a"}
+    status, response = send(domain, body=body, url=URL + "?beta=true", headers=headers)
+    assert status == 200
+    assert json.loads(response)["spend_guard"]["type"] == "tokenpak_spend_guard_cancelled"
+    assert pending.get_by_id(held.pending_id).status == "discarded"
+    assert calls == [] and domain[3] == []
+    assert registry.all_statuses()["anthropic"]["total_failures"] == 0
+    with sqlite3.connect(domain[1]) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM budget_reservations").fetchone()[0] == 0
+
+    # The same fault must still block work that would actually be forwarded.
+    next_body = native_text_body(max_tokens=16)
+    next_body["messages"][0]["content"][-1]["text"] = "different synthetic work"
+    status, response = send(domain, body=next_body, url=URL + "?beta=true", headers=headers)
+    assert status == 402
+    assert json.loads(response)["error"]["reason"] == "spend_guard_state_unavailable"
+    assert calls == [failure] and domain[3] == []
