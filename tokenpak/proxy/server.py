@@ -119,6 +119,7 @@ from .capsule_integration import RequestHook
 from .circuit_breaker import (
     get_circuit_breaker_registry,
     get_rate_limit_registry,
+    is_startup_check,
     provider_from_url,
 )
 from .connection_pool import ConnectionPool, PoolConfig
@@ -2637,7 +2638,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                     and resp.status_code == 429
                                     and _cb_provider
                                 ):
-                                    get_rate_limit_registry().record_429(_cb_provider)
+                                    get_rate_limit_registry().record_429(
+                                        _cb_provider, startup_check=is_startup_check(body)
+                                    )
                                 self.send_response(resp.status_code)
                                 self.send_header("Content-Type", "application/json")
                                 self.send_header("Content-Length", str(len(_norm_err_body)))
@@ -2838,7 +2841,9 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # the breaker still closed — before this call landed. See the
                 # matching comment in the streaming branch below.
                 if should_log and is_model_request and resp.status_code == 429 and _cb_provider:
-                    get_rate_limit_registry().record_429(_cb_provider)
+                    get_rate_limit_registry().record_429(
+                        _cb_provider, startup_check=is_startup_check(body)
+                    )
 
                 # Normalize upstream 4xx/5xx to canonical error envelope before
                 # sending headers so we can set the correct Content-Type.

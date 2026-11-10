@@ -10,6 +10,7 @@ Extracted from runtime/proxy.py (L812-1146) during the proxy modularization.
 
 from __future__ import annotations
 
+import json
 import os
 import socket
 import threading
@@ -757,11 +758,48 @@ def _reset_registry_for_testing(
 #   TOKENPAK_RATE_LIMIT_WINDOW_SEC   — rolling window length in seconds (default: 60)
 #   TOKENPAK_RATE_LIMIT_THRESHOLD    — 429s in window before tripping   (default: 5)
 #   TOKENPAK_RATE_LIMIT_COOLDOWN_SEC — seconds to stay open before auto-close (default: 30)
+#   TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_TOKENS — a non-streaming request for at
+#       most this many output tokens is a client's startup check; its 429 is
+#       counted separately and never opens the circuit (default: 1; 0 disables;
+#       read at use time)
 # ===========================================================================
 
 _RL_WINDOW_SEC: float = float(os.environ.get("TOKENPAK_RATE_LIMIT_WINDOW_SEC", "60"))
 _RL_THRESHOLD: int = int(os.environ.get("TOKENPAK_RATE_LIMIT_THRESHOLD", "5"))
 _RL_COOLDOWN_SEC: float = float(os.environ.get("TOKENPAK_RATE_LIMIT_COOLDOWN_SEC", "30"))
+_STARTUP_CHECK_ENV = "TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_TOKENS"
+_DEFAULT_STARTUP_CHECK_MAX_TOKENS = 1
+
+
+def _startup_check_max_tokens() -> int:
+    raw = os.environ.get(_STARTUP_CHECK_ENV, "").strip()
+    try:
+        value = int(raw) if raw else _DEFAULT_STARTUP_CHECK_MAX_TOKENS
+    except ValueError:
+        return _DEFAULT_STARTUP_CHECK_MAX_TOKENS
+    return value if value >= 0 else _DEFAULT_STARTUP_CHECK_MAX_TOKENS
+
+
+def is_startup_check(body: Optional[bytes]) -> bool:
+    """Whether *body* is a client's startup check rather than real work.
+
+    Claude Code opens each session with a non-streaming request for a single
+    output token and reads the provider's limit headers from the reply. A 429
+    on that request informs the client, which carries on with the session; it
+    says nothing about whether the provider is refusing real requests, so it
+    must not open the shared circuit for every other session.
+    """
+    limit = _startup_check_max_tokens()
+    if limit <= 0 or not body:
+        return False
+    try:
+        data = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return False
+    if not isinstance(data, dict) or data.get("stream") is True:
+        return False
+    requested = data.get("max_tokens")
+    return isinstance(requested, int) and not isinstance(requested, bool) and 0 < requested <= limit
 
 
 class RateLimitCircuitBreaker:
@@ -793,14 +831,22 @@ class RateLimitCircuitBreaker:
         self._429_times: deque[float] = deque()
         self._opened_at: float = 0.0
         self._is_open: bool = False
+        self._startup_checks_ignored: int = 0
 
     # ------------------------------------------------------------------
     # Write
     # ------------------------------------------------------------------
 
-    def record_429(self) -> None:
-        """Record one 429 response.  Opens circuit when threshold is reached."""
+    def record_429(self, *, startup_check: bool = False) -> None:
+        """Record one 429 response.  Opens circuit when threshold is reached.
+
+        A 429 on a client's startup check (see :func:`is_startup_check`) is
+        counted separately and never opens the circuit.
+        """
         with self._lock:
+            if startup_check:
+                self._startup_checks_ignored += 1
+                return
             now = time.monotonic()
             self._429_times.append(now)
             # Expire entries outside the rolling window
@@ -838,6 +884,7 @@ class RateLimitCircuitBreaker:
             self._is_open = False
             self._429_times.clear()
             self._opened_at = 0.0
+            self._startup_checks_ignored = 0
 
     def status(self) -> dict[str, object]:
         """Return a status dict suitable for health-check endpoints."""
@@ -853,6 +900,7 @@ class RateLimitCircuitBreaker:
                 "threshold": self._threshold,
                 "cooldown_sec": self._cooldown_sec,
                 "recent_429s_in_window": len(self._429_times),
+                "startup_check_429s_ignored": self._startup_checks_ignored,
                 "cooldown_remaining_sec": cooldown_remaining,
             }
 
@@ -882,9 +930,9 @@ class RateLimitCircuitBreakerRegistry:
                 )
             return self._breakers[provider]
 
-    def record_429(self, provider: str) -> None:
-        """Record a 429 for *provider*.  May open the circuit."""
-        self._get_or_create(provider).record_429()
+    def record_429(self, provider: str, *, startup_check: bool = False) -> None:
+        """Record a 429 for *provider*.  May open the circuit unless *startup_check*."""
+        self._get_or_create(provider).record_429(startup_check=startup_check)
 
     def is_open(self, provider: str) -> bool:
         """Return True if the rate-limit circuit is open for *provider*."""
