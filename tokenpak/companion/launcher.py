@@ -4,7 +4,8 @@ the companion active.
 
 What it does:
     1. Loads companion config from env vars
-    2. Ensures the tokenpak proxy is running (if configured)
+    2. Waits a bounded time for the tokenpak proxy and refuses to start
+       Claude without it unless TOKENPAK_ALLOW_DIRECT=1
     3. Generates config files: MCP config, settings overlay, system prompt
     4. Execs into ``claude`` with the right flags
 
@@ -28,6 +29,7 @@ What the user sees:
 from __future__ import annotations
 
 import json
+import math
 import os
 import random
 import re
@@ -35,6 +37,7 @@ import shlex
 import shutil
 import sys
 import tempfile
+import time
 import unicodedata
 from pathlib import Path
 from typing import Any, TextIO
@@ -175,6 +178,108 @@ injects is wrapped in `[PAK ...]` envelopes.
 """
 
 
+# ---------------------------------------------------------------------------
+# Proxy readiness at launch
+#
+# Without a reachable proxy Claude runs with no spend guard and no telemetry.
+# A missed probe used to start it directly with no error. The launcher now
+# keeps probing for a bounded time and then refuses, unless the operator has
+# explicitly allowed a direct start or already routes Claude elsewhere. Every
+# value is read at launch time; the constants below are only defaults.
+# ---------------------------------------------------------------------------
+
+_DIRECT_START_ENV = "TOKENPAK_ALLOW_DIRECT"
+_PROXY_WAIT_ENV = "TOKENPAK_PROXY_WAIT_SECONDS"
+_PROBE_TIMEOUT_ENV = "TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS"
+_PROBE_INTERVAL_ENV = "TOKENPAK_PROXY_PROBE_INTERVAL_SECONDS"
+_DEFAULT_PROXY_PORT = "8766"
+_DEFAULT_PROXY_WAIT_S = 10.0
+_DEFAULT_PROBE_TIMEOUT_S = 1.0
+_DEFAULT_PROBE_INTERVAL_S = 0.5
+# Floor for the pause between probes, so a zero interval cannot spin.
+_MIN_PROBE_PAUSE_S = 0.05
+
+
+def _env_seconds(name: str, default: float, *, allow_zero: bool = True) -> float:
+    """A finite, non-negative duration from the environment, else *default*."""
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = float(raw) if raw else default
+    except ValueError:
+        return default
+    if not math.isfinite(value) or value < 0 or (value == 0 and not allow_zero):
+        return default
+    return value
+
+
+def _default_proxy_url() -> str:
+    """This install's proxy: TOKENPAK_PROXY_URL, then TOKENPAK_PORT, then the default port."""
+    explicit = os.environ.get("TOKENPAK_PROXY_URL", "").strip()
+    if explicit:
+        return explicit
+    port = os.environ.get("TOKENPAK_PORT", "").strip() or _DEFAULT_PROXY_PORT
+    return f"http://localhost:{port}"
+
+
+def _direct_start_allowed() -> bool:
+    return os.environ.get(_DIRECT_START_ENV, "").strip().lower() in ("1", "true", "yes")
+
+
+def _proxy_healthy(url: str, timeout: float) -> bool:
+    try:
+        import httpx
+
+        return httpx.get(f"{url}/health", timeout=timeout).status_code == 200
+    except Exception:
+        return False
+
+
+def _wait_for_proxy(
+    url: str,
+    *,
+    wait_s: float,
+    probe_timeout_s: float,
+    interval_s: float,
+    clock: Any = time.monotonic,
+    sleep: Any = time.sleep,
+) -> bool:
+    """Probe *url* until it answers or *wait_s* has passed; one probe always runs."""
+    deadline = clock() + wait_s
+    timeout = probe_timeout_s
+    while True:
+        if _proxy_healthy(url, timeout):
+            return True
+        remaining = deadline - clock()
+        if remaining <= 0:
+            return False
+        sleep(min(max(interval_s, _MIN_PROBE_PAUSE_S), remaining))
+        timeout = min(probe_timeout_s, max(deadline - clock(), _MIN_PROBE_PAUSE_S))
+
+
+def _resolve_proxy(*, inherited_base_url: str | None) -> tuple[str, str | None]:
+    """Find the proxy for a launch with none configured.
+
+    Returns ``(proxy_url, refusal)``. ``proxy_url`` is empty when no proxy
+    answered; ``refusal`` is the single line to print when the launch must
+    stop instead of starting Claude unproxied.
+    """
+    url = _default_proxy_url()
+    probe_timeout = _env_seconds(_PROBE_TIMEOUT_ENV, _DEFAULT_PROBE_TIMEOUT_S, allow_zero=False)
+    if inherited_base_url or _direct_start_allowed():
+        # The caller already routes Claude, or explicitly allowed a direct
+        # start: probe once and do not hold the launch.
+        return (url if _proxy_healthy(url, probe_timeout) else ""), None
+    wait_s = _env_seconds(_PROXY_WAIT_ENV, _DEFAULT_PROXY_WAIT_S)
+    interval = _env_seconds(_PROBE_INTERVAL_ENV, _DEFAULT_PROBE_INTERVAL_S)
+    if _wait_for_proxy(url, wait_s=wait_s, probe_timeout_s=probe_timeout, interval_s=interval):
+        return url, None
+    return "", (
+        f"✗ tokenpak claude — TokenPak proxy not reachable at {url} after "
+        f"{wait_s:g}s; run `tokenpak start`, or set {_DIRECT_START_ENV}=1 to start "
+        "Claude without it."
+    )
+
+
 def main(args: list[str] | None = None) -> int:
     """Entry point for ``tokenpak claude``."""
     args = args if args is not None else sys.argv[1:]
@@ -201,6 +306,26 @@ def main(args: list[str] | None = None) -> int:
         return 2
     if show_display and surface == "auto" and display.user_statusline(args):
         show_display = False
+
+    # Captured before any override: the child inherits a copy of this
+    # environment, so a base URL already exported here routes Claude even when
+    # TokenPak selects no proxy of its own.  Reporting only TokenPak's own
+    # selection would understate where traffic actually goes.
+    inherited_base_url = os.environ.get("ANTHROPIC_BASE_URL")
+
+    # Resolve the proxy before anything is written, so a refused launch leaves
+    # no generated files behind.
+    proxy_url = config.proxy_url
+    direct_start = False
+    if not proxy_url:
+        proxy_url, refusal = _resolve_proxy(inherited_base_url=inherited_base_url)
+        if refusal is not None:
+            print(refusal, file=sys.stderr)
+            from tokenpak.cli.exit_codes import EXIT_RUNTIME_UNAVAILABLE
+
+            return EXIT_RUNTIME_UNAVAILABLE
+        direct_start = not proxy_url and not inherited_base_url
+
     if show_display:
         display.preflight("native")
 
@@ -236,23 +361,6 @@ def main(args: list[str] | None = None) -> int:
         env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "1"
         env["CLAUDE_CODE_SKIP_PROMPT_HISTORY"] = "1"
 
-    # Captured before any override: the child inherits a copy of this
-    # environment, so a base URL already exported here routes Claude even when
-    # TokenPak selects no proxy of its own.  Reporting only TokenPak's own
-    # selection would understate where traffic actually goes.
-    inherited_base_url = env.get("ANTHROPIC_BASE_URL")
-
-    proxy_url = config.proxy_url
-    if not proxy_url:
-        default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
-        try:
-            import httpx
-
-            resp = httpx.get(f"{default_proxy}/health", timeout=1.0)
-            if resp.status_code == 200:
-                proxy_url = default_proxy
-        except Exception:
-            pass
     if proxy_url:
         env["ANTHROPIC_BASE_URL"] = proxy_url
 
@@ -278,6 +386,14 @@ def main(args: list[str] | None = None) -> int:
         print(
             f"     {_DIM}Routed by inherited ANTHROPIC_BASE_URL \u2192 "
             f"{inherited_base_url} (not selected by TokenPak){_RESET}",
+            file=sys.stderr,
+        )
+    elif direct_start:
+        # Allowed only by the explicit switch; say so instead of starting a
+        # session that silently skips the proxy.
+        print(
+            f"     {_DIM}Proxy not reachable → starting Claude directly "
+            f"({_DIRECT_START_ENV} is set){_RESET}",
             file=sys.stderr,
         )
     print(file=sys.stderr)
