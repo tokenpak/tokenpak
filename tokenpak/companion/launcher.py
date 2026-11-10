@@ -198,6 +198,10 @@ _DEFAULT_PROBE_TIMEOUT_S = 1.0
 _DEFAULT_PROBE_INTERVAL_S = 0.5
 # Floor for the pause between probes, so a zero interval cannot spin.
 _MIN_PROBE_PAUSE_S = 0.05
+# The documented "runtime unavailable" exit code. Its definition lives in
+# tokenpak.cli.exit_codes; the companion layer may not import the CLI layer,
+# so the value is mirrored here and a test keeps the two equal.
+_EXIT_RUNTIME_UNAVAILABLE = 7
 
 
 def _env_seconds(name: str, default: float, *, allow_zero: bool = True) -> float:
@@ -321,9 +325,7 @@ def main(args: list[str] | None = None) -> int:
         proxy_url, refusal = _resolve_proxy(inherited_base_url=inherited_base_url)
         if refusal is not None:
             print(refusal, file=sys.stderr)
-            from tokenpak.cli.exit_codes import EXIT_RUNTIME_UNAVAILABLE
-
-            return EXIT_RUNTIME_UNAVAILABLE
+            return _EXIT_RUNTIME_UNAVAILABLE
         direct_start = not proxy_url and not inherited_base_url
 
     if show_display:

@@ -188,3 +188,7 @@ def test_cli_exits_with_the_launcher_refusal_status(monkeypatch):
             _cli_core.cmd_claude(argparse.Namespace(args=[], budget=None))
     assert stopped.value.code == EXIT_RUNTIME_UNAVAILABLE
     assert os.environ.get("TOKENPAK_COMPANION_BUDGET") is None
+
+
+def test_refusal_code_matches_the_documented_exit_code():
+    assert launcher._EXIT_RUNTIME_UNAVAILABLE == EXIT_RUNTIME_UNAVAILABLE
