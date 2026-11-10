@@ -6,6 +6,72 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [1.31.1] — 2026-11-10
+
+### Fixed
+
+- Spend Guard no longer blocks sessions on images it miscounted. It counted an
+  image's encoded bytes as text, so a session with a few screenshots was
+  projected at several times the size the provider reported and could be
+  blocked far below its limits. Images are now estimated from their dimensions
+  with the provider's formula, and later estimates in a session start from the
+  usage the provider reported for the previous request. (#369)
+- Spend Guard approvals no longer strand a session. A TIP directive in the
+  latest user turn releases the held request. Turns that carry only tool
+  results or notifications keep the hold without using up your reply. A late
+  "yes" approves the current request within the allowed growth instead of
+  replaying an expired one. 15-minute and session grants keep the scope you
+  gave them; a bare "yes" still approves one request. No approval crosses the
+  context window, a breached rolling cap or the session cap, and hard stops are
+  unchanged. (#369)
+- The companion status-line writer stops using CPU while a session is idle. It
+  backs off while its inputs are unchanged, bounds its cache cleanup, and exits
+  when its session ends or stays inactive. (#368)
+- The Windows launchers for Claude and Codex ship in the package. They existed
+  only as local patches, so a reinstall or upgrade removed the entry point
+  Windows sessions start through. Each starts the local proxy when it is not
+  healthy and exits non-zero if it still is not. Linux and macOS are
+  unchanged. (#370)
+- The Codex session lease for your own Codex home no longer fails on Windows.
+  It called a POSIX-only permission function and compared POSIX permission
+  bits, which Windows does not have; both now apply only where the platform has
+  them. (#372)
+- The proxy no longer refuses all of a provider's traffic because several
+  sessions started at once. Claude Code opens each session with a one-token
+  check, and a 429 reply to it opened the shared 429 breaker after five
+  session starts in a minute. Those replies are now counted separately
+  (`startup_check_429s_ignored` in `/circuit-breakers`) and never open the
+  circuit; the client still receives them unchanged.
+  `TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_TOKENS` (default 1, 0 to disable)
+  sets what counts as a startup check. (#373)
+
+### Changed
+
+- `tokenpak claude` no longer starts Claude without the proxy when the proxy
+  does not answer. It used to probe once for one second and then start Claude
+  directly, with no spend guard or telemetry and no message. It now keeps
+  probing for up to `TOKENPAK_PROXY_WAIT_SECONDS` (default 10), then exits with
+  code 7 and one line that names the URL, `tokenpak start` and the override.
+  Set `TOKENPAK_ALLOW_DIRECT=1` to start Claude without the proxy; the banner
+  then says so. An `ANTHROPIC_BASE_URL` you export yourself is still used
+  without waiting. `tokenpak claude` now exits with the launcher's status
+  instead of 0. (#371)
+
+### Compatibility
+
+- **If you run `tokenpak claude` without the proxy**, start it first with
+  `tokenpak start`, or set `TOKENPAK_ALLOW_DIRECT=1`.
+- The upgrade is package-only: no migration and no configuration change. To
+  roll back, install `tokenpak==1.31.0`.
+- TokenPak Pro 0.6.1 requires `tokenpak==1.31.0` exactly. Hosts with Pro stay
+  on 1.31.0 until a Pro release that accepts 1.31.1 is published; upgrade the
+  pair together. See the [1.31.1 release log](docs/release-log/v1.31.1.md).
+- The public API snapshot gains 42 symbols, among them the Windows launcher
+  modules and the Spend Guard `media`, `approvals` and `usage_anchor` modules.
+  It drops `tokenpak.status.worker.valid_session`, an incidental import; import
+  `valid_session` from `tokenpak.status.binding`, where it has always been
+  defined. See the release log.
+
 ## [1.31.0] — 2026-10-09
 
 ### Added
