@@ -178,12 +178,13 @@ def test_default_proxy_url_honours_the_configured_port(monkeypatch):
     assert launcher._default_proxy_url() == "http://localhost:9123"
 
 
-def test_cli_returns_the_launcher_refusal_status(monkeypatch):
+def test_cli_exits_with_the_launcher_refusal_status(monkeypatch):
     from tokenpak import _cli_core
 
     monkeypatch.setattr(_cli_core, "_require_companion_client", lambda name: None)
     monkeypatch.delenv("TOKENPAK_COMPANION_BUDGET", raising=False)
     with patch("tokenpak.companion.launch", return_value=EXIT_RUNTIME_UNAVAILABLE):
-        rc = _cli_core.cmd_claude(argparse.Namespace(args=[], budget=None))
-    assert rc == EXIT_RUNTIME_UNAVAILABLE
+        with pytest.raises(SystemExit) as stopped:
+            _cli_core.cmd_claude(argparse.Namespace(args=[], budget=None))
+    assert stopped.value.code == EXIT_RUNTIME_UNAVAILABLE
     assert os.environ.get("TOKENPAK_COMPANION_BUDGET") is None

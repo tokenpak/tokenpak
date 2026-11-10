@@ -3094,7 +3094,7 @@ def _require_companion_client(name: str) -> None:
         sys.exit(EXIT_MISSING_PREREQUISITE)
 
 
-def cmd_claude(args: CommandArgs) -> int:
+def cmd_claude(args: CommandArgs) -> None:
     """Launch Claude Code with tokenpak companion active."""
     import os
 
@@ -3105,7 +3105,7 @@ def cmd_claude(args: CommandArgs) -> int:
 
     # Exec replaces this process on success; a returned status is a refusal
     # (for example, no reachable proxy) and must reach the shell.
-    return launch(args=list(args.args))
+    sys.exit(launch(args=list(args.args)))
 
 
 def cmd_codex(args: CommandArgs) -> None:
