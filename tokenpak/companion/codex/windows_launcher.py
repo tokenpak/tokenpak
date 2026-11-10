@@ -18,7 +18,12 @@ from urllib.request import urlopen
 
 from tokenpak import _paths
 from tokenpak.companion._python_spawn import python_spawn_prefix
+from tokenpak.companion.codex.mcp_config import SERVER_NAME
 from tokenpak.status.binding import ENV, create_launch_dir
+
+# Name of the model provider this launcher defines for each session through
+# ``-c`` overrides; it routes Codex to the local TokenPak proxy.
+MODEL_PROVIDER = "tokenpak_local"
 
 
 def split_overrides(args: list[str]) -> tuple[list[str], list[str]]:
@@ -113,14 +118,15 @@ def main(argv: list[str] | None = None) -> int:
         env[ENV] = str(directory)
         env["TOKENPAK_COMPANION_PYTHON"] = sys.executable
         overrides, forwarded = split_overrides(args)
-        route = ["--no-daemon", "-c", 'model_provider="tokenpak_local"']
+        route = ["--no-daemon", "-c", f"model_provider={json.dumps(MODEL_PROVIDER)}"]
+        provider = f"model_providers.{MODEL_PROVIDER}"
         settings = {
-            "model_providers.tokenpak_local.name": "TokenPak local proxy",
-            "model_providers.tokenpak_local.base_url": base_url + "/v1",
-            "model_providers.tokenpak_local.wire_api": "responses",
-            "model_providers.tokenpak_local.requires_openai_auth": True,
-            "model_providers.tokenpak_local.supports_websockets": False,
-            f"mcp_servers.tokenpak-companion.env.{ENV}": str(directory),
+            f"{provider}.name": "TokenPak local proxy",
+            f"{provider}.base_url": base_url + "/v1",
+            f"{provider}.wire_api": "responses",
+            f"{provider}.requires_openai_auth": True,
+            f"{provider}.supports_websockets": False,
+            f"mcp_servers.{SERVER_NAME}.env.{ENV}": str(directory),
         }
         for key, value in settings.items():
             route.extend(["-c", f"{key}={json.dumps(value)}"])
