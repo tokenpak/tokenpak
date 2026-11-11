@@ -37,6 +37,7 @@ from typing import cast as _cast
 
 from tokenpak import _paths
 
+from .. import _proxy_endpoint as _endpoint
 from ..config import CompanionConfig
 from .accounting import (
     build_receipt,
@@ -85,8 +86,10 @@ _TEAL = "\033[38;2;0;180;170m"
 _DIM = "\033[2m"
 _RESET = "\033[0m"
 _CLEAR_LINE = "\033[2K"
-_TOKENPAK_OPENAI_BASE_URL = "http://127.0.0.1:8766/v1"
 _TOKENPAK_MODEL_PROVIDER = "tokenpak"
+# Seconds the launch health probe may take, unless
+# TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS sets another value at launch.
+_DEFAULT_PROBE_TIMEOUT_S = 0.5
 
 _BYPASS_FLAG = "--dangerously-bypass-approvals-and-sandbox"
 _BYPASS_ENV_VAR = "TOKENPAK_CODEX_BYPASS_APPROVALS_AND_SANDBOX"
@@ -188,19 +191,33 @@ def _has_model_route_override(args: list[str]) -> bool:
     return False
 
 
-def _local_proxy_is_healthy(timeout_seconds: float = 0.5) -> bool:
-    """Check the local TokenPak health endpoint without requiring credentials."""
+def _tokenpak_openai_base_url() -> str:
+    """OpenAI-compatible base URL of this install's proxy, read at launch time."""
+    return _endpoint.proxy_base_url() + "/v1"
+
+
+def _local_proxy_is_healthy(timeout_seconds: float | None = None) -> bool:
+    """Check the local TokenPak health endpoint without requiring credentials.
+
+    The probe is bounded in wall-clock time, not only per network operation.
+    """
     from urllib.request import urlopen
 
-    health_url = _TOKENPAK_OPENAI_BASE_URL.rsplit("/v1", 1)[0] + "/health"
-    try:
-        with urlopen(health_url, timeout=timeout_seconds) as response:  # noqa: S310
+    timeout = (
+        _endpoint.probe_timeout(_DEFAULT_PROBE_TIMEOUT_S)
+        if timeout_seconds is None
+        else timeout_seconds
+    )
+    health_url = _endpoint.proxy_base_url() + "/health"
+
+    def answered() -> bool:
+        with urlopen(health_url, timeout=timeout) as response:  # noqa: S310
             if response.status != 200:
                 return False
             payload = json.loads(response.read(64 * 1024))
-    except (OSError, TimeoutError, ValueError):
-        return False
-    return isinstance(payload, dict) and payload.get("status") in {"ok", "healthy"}
+        return isinstance(payload, dict) and payload.get("status") in {"ok", "healthy"}
+
+    return bool(_endpoint.bounded_call(answered, timeout))
 
 
 def _audit_guard_bypassed_proxy_unhealthy(session_id: str | None) -> None:
@@ -240,13 +257,14 @@ def _with_tokenpak_proxy_route(
         _audit_guard_bypassed_proxy_unhealthy(session_id)
         return list(args), False
     provider = _TOKENPAK_MODEL_PROVIDER
+    base_url = _tokenpak_openai_base_url()
     return [
         "-c",
         f'model_provider="{provider}"',
         "-c",
         f'model_providers.{provider}.name="TokenPak local proxy"',
         "-c",
-        f'model_providers.{provider}.base_url="{_TOKENPAK_OPENAI_BASE_URL}"',
+        f'model_providers.{provider}.base_url="{base_url}"',
         "-c",
         f'model_providers.{provider}.wire_api="responses"',
         "-c",
@@ -1053,7 +1071,7 @@ def main(
         start_monotonic = time.monotonic()
         writer = None
         panel = None
-        env["TOKENPAK_FORECAST_PROXY"] = _TOKENPAK_OPENAI_BASE_URL
+        env["TOKENPAK_FORECAST_PROXY"] = _tokenpak_openai_base_url()
         env["TOKENPAK_FORECAST_ROUTING"] = "proxy" if proxy_routed else "unknown"
         try:
             if show_display and config.enabled:

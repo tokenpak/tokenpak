@@ -10,11 +10,16 @@ Extracted from runtime/proxy.py (L812-1146) during the proxy modularization.
 
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import math
 import os
+import secrets
 import socket
 import threading
 import time
-from collections import deque
+from collections import OrderedDict, deque
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -757,11 +762,88 @@ def _reset_registry_for_testing(
 #   TOKENPAK_RATE_LIMIT_WINDOW_SEC   — rolling window length in seconds (default: 60)
 #   TOKENPAK_RATE_LIMIT_THRESHOLD    — 429s in window before tripping   (default: 5)
 #   TOKENPAK_RATE_LIMIT_COOLDOWN_SEC — seconds to stay open before auto-close (default: 30)
+#   TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_TOKENS — a non-streaming request for at
+#       most this many output tokens is a client's startup check; one such
+#       check per client session can be exempt from the circuit, within the
+#       bounds below (default: 1; 0 disables; read at use time)
+#   TOKENPAK_RATE_LIMIT_STARTUP_CHECK_WINDOW_SEC — each client session gets at
+#       most one such exemption per window of this many seconds (default: 3600;
+#       read at use time)
+#   TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_EXEMPT — at most this many exemptions
+#       per provider per window; further startup checks count as usual
+#       (default: 60; 0 disables; read at use time)
 # ===========================================================================
 
 _RL_WINDOW_SEC: float = float(os.environ.get("TOKENPAK_RATE_LIMIT_WINDOW_SEC", "60"))
 _RL_THRESHOLD: int = int(os.environ.get("TOKENPAK_RATE_LIMIT_THRESHOLD", "5"))
 _RL_COOLDOWN_SEC: float = float(os.environ.get("TOKENPAK_RATE_LIMIT_COOLDOWN_SEC", "30"))
+_STARTUP_CHECK_ENV = "TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_TOKENS"
+_DEFAULT_STARTUP_CHECK_MAX_TOKENS = 1
+_STARTUP_WINDOW_ENV = "TOKENPAK_RATE_LIMIT_STARTUP_CHECK_WINDOW_SEC"
+_DEFAULT_STARTUP_WINDOW_SEC = 3600.0
+_STARTUP_MAX_EXEMPT_ENV = "TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_EXEMPT"
+_DEFAULT_STARTUP_MAX_EXEMPT = 60
+# Key for the digests that stand in for client session identities. It is
+# random per process and never leaves it, so a stored digest cannot be
+# matched against a session value anywhere else.
+_SESSION_DIGEST_KEY = secrets.token_bytes(32)
+
+
+def _startup_check_max_tokens() -> int:
+    raw = os.environ.get(_STARTUP_CHECK_ENV, "").strip()
+    try:
+        value = int(raw) if raw else _DEFAULT_STARTUP_CHECK_MAX_TOKENS
+    except ValueError:
+        return _DEFAULT_STARTUP_CHECK_MAX_TOKENS
+    return value if value >= 0 else _DEFAULT_STARTUP_CHECK_MAX_TOKENS
+
+
+def _startup_check_window_sec() -> float:
+    raw = os.environ.get(_STARTUP_WINDOW_ENV, "").strip()
+    try:
+        value = float(raw) if raw else _DEFAULT_STARTUP_WINDOW_SEC
+    except ValueError:
+        return _DEFAULT_STARTUP_WINDOW_SEC
+    return value if math.isfinite(value) and value > 0 else _DEFAULT_STARTUP_WINDOW_SEC
+
+
+def _startup_check_max_exempt() -> int:
+    raw = os.environ.get(_STARTUP_MAX_EXEMPT_ENV, "").strip()
+    try:
+        value = int(raw) if raw else _DEFAULT_STARTUP_MAX_EXEMPT
+    except ValueError:
+        return _DEFAULT_STARTUP_MAX_EXEMPT
+    return value if value >= 0 else _DEFAULT_STARTUP_MAX_EXEMPT
+
+
+def _session_digest(session_id: Optional[str]) -> Optional[str]:
+    """Keyed digest of a client session identity; the identity itself is never kept."""
+    if not session_id:
+        return None
+    data = session_id.encode("utf-8", "replace")
+    return hmac.new(_SESSION_DIGEST_KEY, data, hashlib.sha256).hexdigest()
+
+
+def is_startup_check(body: Optional[bytes]) -> bool:
+    """Whether *body* is a client's startup check rather than real work.
+
+    Claude Code opens each session with a non-streaming request for a single
+    output token and reads the provider's limit headers from the reply. A 429
+    on that request informs the client, which carries on with the session; it
+    says nothing about whether the provider is refusing real requests, so it
+    must not open the shared circuit for every other session.
+    """
+    limit = _startup_check_max_tokens()
+    if limit <= 0 or not body:
+        return False
+    try:
+        data = json.loads(body)
+    except (ValueError, UnicodeDecodeError):
+        return False
+    if not isinstance(data, dict) or data.get("stream") is True:
+        return False
+    requested = data.get("max_tokens")
+    return isinstance(requested, int) and not isinstance(requested, bool) and 0 < requested <= limit
 
 
 class RateLimitCircuitBreaker:
@@ -793,15 +875,37 @@ class RateLimitCircuitBreaker:
         self._429_times: deque[float] = deque()
         self._opened_at: float = 0.0
         self._is_open: bool = False
+        self._startup_checks_ignored: int = 0
+        # Sessions whose startup check was exempted inside the current
+        # window, as keyed digest -> time, oldest first.
+        self._startup_exempt: OrderedDict[str, float] = OrderedDict()
 
     # ------------------------------------------------------------------
     # Write
     # ------------------------------------------------------------------
 
-    def record_429(self) -> None:
-        """Record one 429 response.  Opens circuit when threshold is reached."""
+    def record_429(self, *, startup_check: bool = False, session_id: Optional[str] = None) -> None:
+        """Record one 429 response.  Opens circuit when threshold is reached.
+
+        A limit response on a client's startup check (see
+        :func:`is_startup_check`) is exempt, counted separately and kept out of
+        the circuit, only when all of these hold:
+
+        - the request carried a client session identity (*session_id*);
+        - that session has not used an exemption within the startup-check
+          window (``TOKENPAK_RATE_LIMIT_STARTUP_CHECK_WINDOW_SEC``);
+        - fewer than ``TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_EXEMPT``
+          exemptions were granted within that window.
+
+        Every other limit response, including a repeat from the same session,
+        counts toward the circuit as before. Sessions are remembered only as
+        keyed digests, at most the configured number per window.
+        """
         with self._lock:
             now = time.monotonic()
+            if startup_check and self._grant_startup_exemption(session_id, now):
+                self._startup_checks_ignored += 1
+                return
             self._429_times.append(now)
             # Expire entries outside the rolling window
             cutoff = now - self._window_sec
@@ -810,6 +914,26 @@ class RateLimitCircuitBreaker:
             if not self._is_open and len(self._429_times) >= self._threshold:
                 self._is_open = True
                 self._opened_at = now
+
+    def _expire_startup_exemptions(self, now: float) -> None:
+        """Forget exemptions older than the startup-check window.  Lock held."""
+        cutoff = now - _startup_check_window_sec()
+        exempt = self._startup_exempt
+        while exempt and next(iter(exempt.values())) <= cutoff:
+            exempt.popitem(last=False)
+
+    def _grant_startup_exemption(self, session_id: Optional[str], now: float) -> bool:
+        """Spend *session_id*'s one startup-check exemption, if it has one.  Lock held."""
+        digest = _session_digest(session_id)
+        if digest is None:
+            return False
+        self._expire_startup_exemptions(now)
+        if digest in self._startup_exempt:
+            return False
+        if len(self._startup_exempt) >= _startup_check_max_exempt():
+            return False
+        self._startup_exempt[digest] = now
+        return True
 
     # ------------------------------------------------------------------
     # Read
@@ -838,11 +962,14 @@ class RateLimitCircuitBreaker:
             self._is_open = False
             self._429_times.clear()
             self._opened_at = 0.0
+            self._startup_checks_ignored = 0
+            self._startup_exempt.clear()
 
     def status(self) -> dict[str, object]:
         """Return a status dict suitable for health-check endpoints."""
         with self._lock:
             now = time.monotonic()
+            self._expire_startup_exemptions(now)
             cooldown_remaining: Optional[float] = None
             if self._is_open:
                 remaining = self._cooldown_sec - (now - self._opened_at)
@@ -853,6 +980,8 @@ class RateLimitCircuitBreaker:
                 "threshold": self._threshold,
                 "cooldown_sec": self._cooldown_sec,
                 "recent_429s_in_window": len(self._429_times),
+                "startup_check_429s_ignored": self._startup_checks_ignored,
+                "startup_check_exemptions_in_window": len(self._startup_exempt),
                 "cooldown_remaining_sec": cooldown_remaining,
             }
 
@@ -882,9 +1011,15 @@ class RateLimitCircuitBreakerRegistry:
                 )
             return self._breakers[provider]
 
-    def record_429(self, provider: str) -> None:
-        """Record a 429 for *provider*.  May open the circuit."""
-        self._get_or_create(provider).record_429()
+    def record_429(
+        self, provider: str, *, startup_check: bool = False, session_id: Optional[str] = None
+    ) -> None:
+        """Record a 429 for *provider*.  May open the circuit.
+
+        See :meth:`RateLimitCircuitBreaker.record_429` for the one bounded
+        exemption a session's startup check can receive.
+        """
+        self._get_or_create(provider).record_429(startup_check=startup_check, session_id=session_id)
 
     def is_open(self, provider: str) -> bool:
         """Return True if the rate-limit circuit is open for *provider*."""

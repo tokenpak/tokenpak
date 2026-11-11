@@ -823,6 +823,7 @@ def request_async_pre_send_flush(base_dir: Path | str) -> bool:
             close_fds=True,
             env=env,
             start_new_session=os.name != "nt",
+            creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
     except Exception:
         try:

@@ -17,6 +17,27 @@ import sys
 import pytest
 
 
+@pytest.fixture(autouse=True)
+def _restore_bootstrap_legacy_names():
+    """Put every legacy name's ``tokenpak.proxy.bootstrap`` value back after
+    each test, whether it passed or failed.
+
+    The tests below write through the shim with plain ``setattr`` rather than
+    ``monkeypatch.setattr``. From pytest 9.2, monkeypatch records a module
+    attribute's old value from the module's own ``__dict__``; the shim never
+    stores the legacy names there (``__getattr__`` resolves them), so the undo
+    would delete the name and the shim would forward that delete to bootstrap,
+    leaving the names missing for every later test in the process.
+    """
+    from tokenpak.core.runtime import proxy as compat
+    from tokenpak.proxy import bootstrap
+
+    saved = {name: getattr(bootstrap, name) for name in compat.__all__}
+    yield
+    for name, value in saved.items():
+        setattr(bootstrap, name, value)
+
+
 def test_lazy_names_resolve_to_canonical_objects():
     """Baseline read-through sanity check (also covered by the compat test
     module), kept here so this file stands alone as the shim's spec."""
@@ -28,33 +49,33 @@ def test_lazy_names_resolve_to_canonical_objects():
         assert getattr(compat, name) is getattr(bootstrap, name)
 
 
-def test_assignment_on_shim_writes_through_to_bootstrap(monkeypatch):
+def test_assignment_on_shim_writes_through_to_bootstrap():
     from tokenpak.core.runtime import proxy as compat
     from tokenpak.proxy import bootstrap
 
     sentinel = object()
-    monkeypatch.setattr(compat, "SESSION", sentinel)
+    compat.SESSION = sentinel
     assert bootstrap.SESSION is sentinel
 
 
-def test_assignment_on_shim_writes_through_for_every_name(monkeypatch):
+def test_assignment_on_shim_writes_through_for_every_name():
     """Every one of the 13 legacy names forwards assignment, not just one."""
     from tokenpak.core.runtime import proxy as compat
     from tokenpak.proxy import bootstrap
 
     for name in compat.__all__:
         sentinel = object()
-        monkeypatch.setattr(compat, name, sentinel)
+        setattr(compat, name, sentinel)
         assert getattr(bootstrap, name) is sentinel, name
 
 
-def test_deleting_name_on_shim_deletes_on_bootstrap(monkeypatch):
+def test_deleting_name_on_shim_deletes_on_bootstrap():
     from tokenpak.core.runtime import proxy as compat
     from tokenpak.proxy import bootstrap
 
     original = bootstrap.MUTATION_AUDIT_TTL_DAYS
     sentinel = object()
-    monkeypatch.setattr(compat, "MUTATION_AUDIT_TTL_DAYS", sentinel)
+    compat.MUTATION_AUDIT_TTL_DAYS = sentinel
     assert bootstrap.MUTATION_AUDIT_TTL_DAYS is sentinel
 
     del compat.MUTATION_AUDIT_TTL_DAYS
@@ -64,16 +85,16 @@ def test_deleting_name_on_shim_deletes_on_bootstrap(monkeypatch):
     bootstrap.MUTATION_AUDIT_TTL_DAYS = original
 
 
-def test_reassigning_after_delete_restores_bootstrap_attribute(monkeypatch):
+def test_reassigning_after_delete_restores_bootstrap_attribute():
     from tokenpak.core.runtime import proxy as compat
     from tokenpak.proxy import bootstrap
 
     original = bootstrap.COMPILATION_MODE
     sentinel = object()
-    monkeypatch.setattr(compat, "COMPILATION_MODE", sentinel)
+    compat.COMPILATION_MODE = sentinel
     assert bootstrap.COMPILATION_MODE is sentinel
 
-    monkeypatch.setattr(compat, "COMPILATION_MODE", original)
+    compat.COMPILATION_MODE = original
     assert bootstrap.COMPILATION_MODE is original
 
 

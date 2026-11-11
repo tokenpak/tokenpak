@@ -1383,11 +1383,17 @@ def cmd_setup(args: CommandArgs) -> int:
         _lifecycle.clear_pid()
         return 1
 
-    _lifecycle.write_pid(proc.pid)
+    server_pid = snap.health_payload.get("pid")
+    runtime_pid = (
+        server_pid
+        if os.name == "nt" and isinstance(server_pid, int) and server_pid > 0
+        else proc.pid
+    )
+    _lifecycle.write_pid(runtime_pid)
     stats_data = _proxy_get("/stats", port=port) or {}
     mode = stats_data.get("compilation_mode")
     mode_suffix = f" (mode: {mode})" if isinstance(mode, str) and mode else ""
-    print(f"✅ Proxy running on http://localhost:{port}{mode_suffix}  (PID {proc.pid})")
+    print(f"✅ Proxy running on http://localhost:{port}{mode_suffix}  (PID {runtime_pid})")
     if snap.owned is None:
         print("   Note: this proxy build does not report its PID on /health, so")
         print("         ownership could not be cross-checked.")
@@ -1568,11 +1574,17 @@ def cmd_start(args: CommandArgs) -> int:
         _lifecycle.clear_pid()
         return EXIT_RUNTIME_UNAVAILABLE
 
-    _lifecycle.write_pid(proc.pid)
+    server_pid = started.health_payload.get("pid")
+    runtime_pid = (
+        server_pid
+        if os.name == "nt" and isinstance(server_pid, int) and server_pid > 0
+        else proc.pid
+    )
+    _lifecycle.write_pid(runtime_pid)
     stats = _proxy_get("/stats", port=port) or {}
     mode = stats.get("compilation_mode")
     mode_suffix = f" (mode: {mode})" if isinstance(mode, str) and mode else ""
-    print(f"\n✅ Proxy running on http://localhost:{port}{mode_suffix}  (PID {proc.pid})\n")
+    print(f"\n✅ Proxy running on http://localhost:{port}{mode_suffix}  (PID {runtime_pid})\n")
     print("Next steps:")
     if started.routed:
         print("  1. Your client is routed to TokenPak.")
@@ -3103,9 +3115,12 @@ def cmd_claude(args: CommandArgs) -> None:
         os.environ["TOKENPAK_COMPANION_BUDGET"] = str(args.budget)
     from .companion import launch
 
+    forwarded = list(args.args)
+    if forwarded[:1] == ["--"]:
+        forwarded = forwarded[1:]
     # Exec replaces this process on success; a returned status is a refusal
     # (for example, no reachable proxy) and must reach the shell.
-    sys.exit(launch(args=list(args.args)))
+    sys.exit(launch(args=forwarded))
 
 
 def cmd_codex(args: CommandArgs) -> None:
