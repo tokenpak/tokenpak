@@ -106,6 +106,7 @@ def test_windows_claude_launch_waits_for_child_and_propagates_exit(profile, monk
     monkeypatch.setattr(launcher, "os", _WindowsOs())
     monkeypatch.setattr(launcher, "_launcher_mode_state", lambda: ("inherit", None))
     monkeypatch.setattr(windows_claude, "prepare_environment", lambda: None)
+    monkeypatch.setattr(launcher, "_proxy_healthy", lambda url, timeout: True)
 
     def call(args, **kwargs):
         captured.update(args=list(args), env=kwargs.get("env"))
