@@ -11,6 +11,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import socket
+import threading
+import time
+from collections.abc import Iterator
+from contextlib import contextmanager
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import patch
 
@@ -145,7 +151,8 @@ def test_wait_is_bounded_by_the_deadline():
 
     assert ok is False
     assert sum(slept) == pytest.approx(2.0)
-    assert probe.call_count == 5  # t=0, 0.5, 1.0, 1.5, 2.0
+    # t=0, 0.5, 1.0, 1.5: no probe starts once the deadline (t=2.0) is reached.
+    assert probe.call_count == 4
 
 
 def test_zero_wait_probes_once():
@@ -175,7 +182,7 @@ def test_zero_probe_timeout_falls_back_to_the_default(monkeypatch):
 def test_default_proxy_url_honours_the_configured_port(monkeypatch):
     monkeypatch.delenv("TOKENPAK_PROXY_URL", raising=False)
     monkeypatch.setenv("TOKENPAK_PORT", "9123")
-    assert launcher._default_proxy_url() == "http://localhost:9123"
+    assert launcher._default_proxy_url() == "http://127.0.0.1:9123"
 
 
 def test_cli_exits_with_the_launcher_refusal_status(monkeypatch):
@@ -192,3 +199,199 @@ def test_cli_exits_with_the_launcher_refusal_status(monkeypatch):
 
 def test_refusal_code_matches_the_documented_exit_code():
     assert launcher._EXIT_RUNTIME_UNAVAILABLE == EXIT_RUNTIME_UNAVAILABLE
+
+
+# ---------------------------------------------------------------------------
+# The total wait holds however the proxy answers
+#
+# The probe client's timeout is per operation, so a reply that arrives a few
+# bytes at a time never tripped it, and the first probe ran with the full
+# per-probe timeout even when the configured total wait was shorter.
+# ---------------------------------------------------------------------------
+
+# Allowance for thread start-up and scheduling on a loaded test host; far
+# below the seconds a misbehaving proxy used to hold a launch.
+_SCHEDULING_SLACK_S = 0.5
+# How long the misbehaving endpoints keep a probe busy if nothing cuts it off.
+_MISBEHAVE_S = 3.0
+
+
+def test_first_probe_respects_total_wait_budget():
+    now = [0.0]
+    timeouts: list[float] = []
+
+    def probe(url: str, timeout: float) -> bool:
+        timeouts.append(timeout)
+        now[0] += timeout
+        return False
+
+    with patch.object(launcher, "_proxy_healthy", side_effect=probe):
+        assert not launcher._wait_for_proxy(
+            PROXY,
+            wait_s=0.1,
+            probe_timeout_s=2,
+            interval_s=0.05,
+            clock=lambda: now[0],
+            sleep=lambda s: now.__setitem__(0, now[0] + s),
+        )
+    assert now[0] <= 0.1, f"elapsed={now[0]}; configured total=0.1; probe timeouts={timeouts}"
+
+
+def test_no_probe_begins_at_expired_deadline():
+    now = [0.0]
+    starts: list[float] = []
+
+    def probe(url: str, timeout: float) -> bool:
+        starts.append(now[0])
+        return False
+
+    with patch.object(launcher, "_proxy_healthy", side_effect=probe):
+        assert not launcher._wait_for_proxy(
+            PROXY,
+            wait_s=0.1,
+            probe_timeout_s=0.1,
+            interval_s=0.1,
+            clock=lambda: now[0],
+            sleep=lambda s: now.__setitem__(0, now[0] + s),
+        )
+    assert all(t < 0.1 for t in starts), f"probe starts={starts}"
+
+
+def test_slow_health_body_cannot_extend_total_wait():
+    chunks = int(_MISBEHAVE_S / 0.02)
+
+    class Handler(BaseHTTPRequestHandler):
+        def log_message(self, *args: object) -> None:
+            pass
+
+        def do_GET(self) -> None:
+            self.send_response(200)
+            self.send_header("Transfer-Encoding", "chunked")
+            self.end_headers()
+            try:
+                for _ in range(chunks):
+                    self.wfile.write(b"1\r\nx\r\n")
+                    self.wfile.flush()
+                    time.sleep(0.02)
+                self.wfile.write(b"0\r\n\r\n")
+                self.wfile.flush()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+
+    server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        start = time.monotonic()
+        result = launcher._wait_for_proxy(
+            f"http://127.0.0.1:{server.server_port}",
+            wait_s=0.1,
+            probe_timeout_s=0.05,
+            interval_s=0.01,
+        )
+        elapsed = time.monotonic() - start
+        assert elapsed < 0.1 + 0.05 + _SCHEDULING_SLACK_S, (
+            f"configured wait=0.1, probe timeout=0.05, elapsed={elapsed:.3f}, accepted={result}"
+        )
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join()
+
+
+@contextmanager
+def _misbehaving_proxy(mode: str) -> Iterator[str]:
+    """A local health endpoint that refuses, stays silent, or answers slowly."""
+    stop = threading.Event()
+    listener = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    listener.bind(("127.0.0.1", 0))
+    url = f"http://127.0.0.1:{listener.getsockname()[1]}"
+    if mode == "refused":
+        listener.close()
+        yield url
+        return
+    listener.listen(16)
+    listener.settimeout(0.05)
+    accepted: list[socket.socket] = []
+
+    def dribble(conn: socket.socket, head: bytes, piece: bytes, tail: bytes) -> None:
+        conn.sendall(head)
+        end = time.monotonic() + _MISBEHAVE_S
+        while not stop.is_set() and time.monotonic() < end:
+            conn.sendall(piece)
+            stop.wait(0.02)
+        conn.sendall(tail)
+
+    def answer(conn: socket.socket) -> None:
+        try:
+            conn.settimeout(_MISBEHAVE_S)
+            conn.recv(65536)
+            if mode == "silent":
+                stop.wait(_MISBEHAVE_S)
+            elif mode == "slow-headers":
+                dribble(conn, b"HTTP/1.1 200 OK\r\n", b"X-Pad: a\r\n", b"Content-Length: 0\r\n\r\n")
+            elif mode == "slow-body":
+                head = b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
+                dribble(conn, head, b"1\r\nx\r\n", b"0\r\n\r\n")
+        except OSError:
+            pass
+        finally:
+            conn.close()
+
+    def serve() -> None:
+        while not stop.is_set():
+            try:
+                conn, _ = listener.accept()
+            except OSError:
+                continue
+            accepted.append(conn)
+            threading.Thread(target=answer, args=(conn,), daemon=True).start()
+
+    server = threading.Thread(target=serve, daemon=True)
+    server.start()
+    try:
+        yield url
+    finally:
+        stop.set()
+        server.join(timeout=2)
+        listener.close()
+        for conn in accepted:
+            conn.close()
+
+
+@pytest.mark.parametrize("mode", ["refused", "silent", "slow-headers", "slow-body"])
+def test_total_wait_holds_however_the_proxy_answers(mode):
+    wait_s, probe_s = 0.3, 0.1
+    with _misbehaving_proxy(mode) as url:
+        started = time.monotonic()
+        ok = launcher._wait_for_proxy(url, wait_s=wait_s, probe_timeout_s=probe_s, interval_s=0.05)
+        elapsed = time.monotonic() - started
+    assert ok is False
+    assert elapsed <= wait_s + probe_s + _SCHEDULING_SLACK_S, f"{mode}: elapsed={elapsed:.3f}"
+
+
+def test_launch_decision_holds_against_a_slow_proxy(launch_env, monkeypatch):
+    """End to end: the refusal comes within the configured wait, not when the proxy finishes."""
+    with _misbehaving_proxy("slow-headers") as url:
+        monkeypatch.setenv("TOKENPAK_PROXY_URL", url)
+        started = time.monotonic()
+        rc, child_env = _run()
+        elapsed = time.monotonic() - started
+    assert rc == EXIT_RUNTIME_UNAVAILABLE
+    assert child_env is None
+    wait_s = float(os.environ["TOKENPAK_PROXY_WAIT_SECONDS"])
+    probe_s = float(os.environ["TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS"])
+    # main() also builds its configuration before probing; allow for it.
+    assert elapsed <= wait_s + probe_s + 2 * _SCHEDULING_SLACK_S, f"elapsed={elapsed:.3f}"
+
+
+def test_a_late_health_answer_is_not_accepted_after_the_probe_budget():
+    def slow(url: str, timeout: float) -> object:
+        time.sleep(1.0)
+        return type("Healthy", (), {"status_code": 200})()
+
+    started = time.monotonic()
+    with patch.object(httpx, "get", side_effect=slow):
+        assert launcher._proxy_healthy(PROXY, 0.05) is False
+    assert time.monotonic() - started < 0.05 + _SCHEDULING_SLACK_S

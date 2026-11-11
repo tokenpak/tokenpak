@@ -19,7 +19,7 @@ What the user sees:
       📦 TokenPak Claude Companion
          TokenPak v1.8.0
          Ready • Mode: Balanced • Budget: Unlimited
-         Proxy active → http://localhost:8766
+         Proxy active → http://127.0.0.1:8766
 
          Your API bill called. It's crying.
 
@@ -29,7 +29,6 @@ What the user sees:
 from __future__ import annotations
 
 import json
-import math
 import os
 import random
 import re
@@ -44,6 +43,7 @@ from typing import Any, TextIO
 
 from .._formatting.colors import Color
 from . import _style
+from ._proxy_endpoint import PROBE_TIMEOUT_ENV, bounded_call, proxy_base_url, seconds_setting
 from ._python_spawn import python_spawn_prefix
 from .config import CompanionConfig
 
@@ -190,9 +190,8 @@ injects is wrapped in `[PAK ...]` envelopes.
 
 _DIRECT_START_ENV = "TOKENPAK_ALLOW_DIRECT"
 _PROXY_WAIT_ENV = "TOKENPAK_PROXY_WAIT_SECONDS"
-_PROBE_TIMEOUT_ENV = "TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS"
+_PROBE_TIMEOUT_ENV = PROBE_TIMEOUT_ENV
 _PROBE_INTERVAL_ENV = "TOKENPAK_PROXY_PROBE_INTERVAL_SECONDS"
-_DEFAULT_PROXY_PORT = "8766"
 _DEFAULT_PROXY_WAIT_S = 10.0
 _DEFAULT_PROBE_TIMEOUT_S = 1.0
 _DEFAULT_PROBE_INTERVAL_S = 0.5
@@ -206,36 +205,49 @@ _EXIT_RUNTIME_UNAVAILABLE = 7
 
 def _env_seconds(name: str, default: float, *, allow_zero: bool = True) -> float:
     """A finite, non-negative duration from the environment, else *default*."""
-    raw = os.environ.get(name, "").strip()
-    try:
-        value = float(raw) if raw else default
-    except ValueError:
-        return default
-    if not math.isfinite(value) or value < 0 or (value == 0 and not allow_zero):
-        return default
-    return value
+    return seconds_setting(name, default, allow_zero=allow_zero)
 
 
 def _default_proxy_url() -> str:
-    """This install's proxy: TOKENPAK_PROXY_URL, then TOKENPAK_PORT, then the default port."""
-    explicit = os.environ.get("TOKENPAK_PROXY_URL", "").strip()
-    if explicit:
-        return explicit
-    port = os.environ.get("TOKENPAK_PORT", "").strip() or _DEFAULT_PROXY_PORT
-    return f"http://localhost:{port}"
+    """This install's proxy, resolved the way every TokenPak launcher does.
+
+    TOKENPAK_PROXY_URL, then TOKENPAK_PORT on the loopback address, then the
+    default port.
+    """
+    return proxy_base_url()
 
 
 def _direct_start_allowed() -> bool:
     return os.environ.get(_DIRECT_START_ENV, "").strip().lower() in ("1", "true", "yes")
 
 
-def _proxy_healthy(url: str, timeout: float) -> bool:
+def _load_probe_client() -> None:
+    """Import the HTTP client once, before any wait starts.
+
+    The import is local start-up cost, not time spent waiting for the proxy,
+    so it must not consume a probe's budget.
+    """
     try:
+        import httpx  # noqa: F401
+    except Exception:  # pragma: no cover - httpx is a core dependency
+        pass
+
+
+def _proxy_healthy(url: str, timeout: float) -> bool:
+    """Whether *url* answers its health check within *timeout* seconds.
+
+    The client's timeout applies to connect and to each read, but a reply
+    that arrives a few bytes at a time never trips it. The whole request is
+    therefore also cut off at *timeout* seconds of wall-clock time.
+    """
+    _load_probe_client()
+
+    def answered() -> bool:
         import httpx
 
         return httpx.get(f"{url}/health", timeout=timeout).status_code == 200
-    except Exception:
-        return False
+
+    return bool(bounded_call(answered, timeout))
 
 
 def _wait_for_proxy(
@@ -247,17 +259,28 @@ def _wait_for_proxy(
     clock: Any = time.monotonic,
     sleep: Any = time.sleep,
 ) -> bool:
-    """Probe *url* until it answers or *wait_s* has passed; one probe always runs."""
+    """Probe *url* until it answers or *wait_s* has passed.
+
+    From the first probe to the decision, at most *wait_s* seconds pass,
+    however the proxy behaves (refusing, silent, or answering slowly): each
+    probe gets the smaller of *probe_timeout_s* and the time left, and no
+    probe starts once the deadline has passed. A zero wait still probes
+    once, for at most *probe_timeout_s*.
+    """
+    _load_probe_client()
     deadline = clock() + wait_s
-    timeout = probe_timeout_s
+    remaining = wait_s
     while True:
-        if _proxy_healthy(url, timeout):
+        budget = min(probe_timeout_s, remaining) if remaining > 0 else probe_timeout_s
+        if _proxy_healthy(url, budget):
             return True
         remaining = deadline - clock()
         if remaining <= 0:
             return False
         sleep(min(max(interval_s, _MIN_PROBE_PAUSE_S), remaining))
-        timeout = min(probe_timeout_s, max(deadline - clock(), _MIN_PROBE_PAUSE_S))
+        remaining = deadline - clock()
+        if remaining <= 0:
+            return False
 
 
 def _resolve_proxy(*, inherited_base_url: str | None) -> tuple[str, str | None]:
