@@ -119,6 +119,7 @@ from .capsule_integration import RequestHook
 from .circuit_breaker import (
     get_circuit_breaker_registry,
     get_rate_limit_registry,
+    is_startup_check,
     provider_from_url,
 )
 from .connection_pool import ConnectionPool, PoolConfig
@@ -444,6 +445,25 @@ _CB_FAILURE_STATUSES = frozenset({500, 502, 503, 504, 529})
 def _cb_status_is_provider_failure(status_code: int | None) -> bool:
     """True when a completed exchange's final status is a provider failure."""
     return status_code in _CB_FAILURE_STATUSES
+
+
+def _record_upstream_limit(provider: str, body: bytes | None, headers: Any) -> None:
+    """Count an upstream limit response toward *provider*'s shared breaker.
+
+    A client's startup check passes along the session identity from the same
+    headers used for request attribution, so the breaker can exempt at most
+    one such check per session (see ``RateLimitCircuitBreaker.record_429``).
+    The identity is handed over only for that comparison; it is not logged.
+    """
+    startup_check = is_startup_check(body)
+    session_id = None
+    if startup_check:
+        from .request_pipeline import _resolve_session_id
+
+        session_id = _resolve_session_id(headers, "") or None
+    get_rate_limit_registry().record_429(
+        provider, startup_check=startup_check, session_id=session_id
+    )
 
 
 def _is_client_disconnect_error(exc: BaseException) -> bool:
@@ -2637,7 +2657,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                                     and resp.status_code == 429
                                     and _cb_provider
                                 ):
-                                    get_rate_limit_registry().record_429(_cb_provider)
+                                    _record_upstream_limit(_cb_provider, body, self.headers)
                                 self.send_response(resp.status_code)
                                 self.send_header("Content-Type", "application/json")
                                 self.send_header("Content-Length", str(len(_norm_err_body)))
@@ -2838,7 +2858,7 @@ class _ProxyHandler(BaseHTTPRequestHandler):
                 # the breaker still closed — before this call landed. See the
                 # matching comment in the streaming branch below.
                 if should_log and is_model_request and resp.status_code == 429 and _cb_provider:
-                    get_rate_limit_registry().record_429(_cb_provider)
+                    _record_upstream_limit(_cb_provider, body, self.headers)
 
                 # Normalize upstream 4xx/5xx to canonical error envelope before
                 # sending headers so we can set the correct Content-Type.
