@@ -12,13 +12,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from tokenpak import _paths
-from tokenpak.companion._proxy_endpoint import (
-    PROXY_URL_ENV,
-    bounded_call,
-    probe_timeout,
-    proxy_base_url,
-    proxy_port,
-)
+from tokenpak.companion import _proxy_endpoint as _endpoint
 from tokenpak.companion._python_spawn import python_spawn_prefix
 from tokenpak.companion.config import CompanionConfig
 
@@ -26,7 +20,7 @@ _PROMPT_MODULE = "tokenpak.companion.hooks.pre_send"
 _NATIVE_MODULE = "tokenpak.companion.hooks.windows_native"
 # Seconds one proxy health probe may take, unless
 # TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS sets another value at launch.
-DEFAULT_PROBE_TIMEOUT_S = 3.0
+_DEFAULT_PROBE_TIMEOUT_S = 3.0
 
 
 def prepare_environment() -> None:
@@ -43,7 +37,7 @@ def prepare_environment() -> None:
     # Pin the address every TokenPak launcher resolves (a configured URL
     # wins, normalized), so the hooks, MCP server and status line started
     # under this session use the same proxy.
-    os.environ[PROXY_URL_ENV] = proxy_base_url()
+    os.environ[_endpoint.PROXY_URL_ENV] = _endpoint.proxy_base_url()
 
 
 def native_hook(action: str) -> dict:
@@ -129,10 +123,10 @@ def main() -> int:
     prepare_environment()
     args = sys.argv[1:]
     if args not in (["--help"], ["-h"], ["--version"], ["-v"]):
-        url = proxy_base_url()
-        timeout = probe_timeout(DEFAULT_PROBE_TIMEOUT_S)
+        url = _endpoint.proxy_base_url()
+        timeout = _endpoint.probe_timeout(_DEFAULT_PROBE_TIMEOUT_S)
         try:
-            port = proxy_port()
+            port = _endpoint.proxy_port()
         except ValueError as exc:
             print(f"tokenpak: {exc}", file=sys.stderr)
             return 1
@@ -144,7 +138,7 @@ def main() -> int:
 
         def healthy() -> bool:
             # Bounded in wall-clock time, not only per network operation.
-            return bool(bounded_call(answered, timeout))
+            return bool(_endpoint.bounded_call(answered, timeout))
 
         if not healthy():
             executable, *flags = python_spawn_prefix()

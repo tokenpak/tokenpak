@@ -37,7 +37,7 @@ from typing import cast as _cast
 
 from tokenpak import _paths
 
-from .._proxy_endpoint import bounded_call, probe_timeout, proxy_base_url
+from .. import _proxy_endpoint as _endpoint
 from ..config import CompanionConfig
 from .accounting import (
     build_receipt,
@@ -193,7 +193,7 @@ def _has_model_route_override(args: list[str]) -> bool:
 
 def _tokenpak_openai_base_url() -> str:
     """OpenAI-compatible base URL of this install's proxy, read at launch time."""
-    return proxy_base_url() + "/v1"
+    return _endpoint.proxy_base_url() + "/v1"
 
 
 def _local_proxy_is_healthy(timeout_seconds: float | None = None) -> bool:
@@ -204,9 +204,11 @@ def _local_proxy_is_healthy(timeout_seconds: float | None = None) -> bool:
     from urllib.request import urlopen
 
     timeout = (
-        probe_timeout(_DEFAULT_PROBE_TIMEOUT_S) if timeout_seconds is None else timeout_seconds
+        _endpoint.probe_timeout(_DEFAULT_PROBE_TIMEOUT_S)
+        if timeout_seconds is None
+        else timeout_seconds
     )
-    health_url = proxy_base_url() + "/health"
+    health_url = _endpoint.proxy_base_url() + "/health"
 
     def answered() -> bool:
         with urlopen(health_url, timeout=timeout) as response:  # noqa: S310
@@ -215,7 +217,7 @@ def _local_proxy_is_healthy(timeout_seconds: float | None = None) -> bool:
             payload = json.loads(response.read(64 * 1024))
         return isinstance(payload, dict) and payload.get("status") in {"ok", "healthy"}
 
-    return bool(bounded_call(answered, timeout))
+    return bool(_endpoint.bounded_call(answered, timeout))
 
 
 def _audit_guard_bypassed_proxy_unhealthy(session_id: str | None) -> None:

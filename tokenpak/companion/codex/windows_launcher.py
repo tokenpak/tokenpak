@@ -17,12 +17,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from tokenpak import _paths
-from tokenpak.companion._proxy_endpoint import (
-    bounded_call,
-    probe_timeout,
-    proxy_base_url,
-    proxy_port,
-)
+from tokenpak.companion import _proxy_endpoint as _endpoint
 from tokenpak.companion._python_spawn import python_spawn_prefix
 from tokenpak.companion.codex.mcp_config import SERVER_NAME
 from tokenpak.status.binding import ENV, create_launch_dir
@@ -32,7 +27,7 @@ from tokenpak.status.binding import ENV, create_launch_dir
 MODEL_PROVIDER = "tokenpak_local"
 # Seconds one proxy health probe may take, unless
 # TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS sets another value at launch.
-DEFAULT_PROBE_TIMEOUT_S = 3.0
+_DEFAULT_PROBE_TIMEOUT_S = 3.0
 
 
 def split_overrides(args: list[str]) -> tuple[list[str], list[str]]:
@@ -104,9 +99,9 @@ def main(argv: list[str] | None = None) -> int:
         env["PYTHONUTF8"] = "1"
         # The same resolution every TokenPak launcher uses, read from this
         # launch's environment (caller plus local profile).
-        base_url = proxy_base_url(env)
-        port = proxy_port(env)
-        timeout = probe_timeout(DEFAULT_PROBE_TIMEOUT_S, env)
+        base_url = _endpoint.proxy_base_url(env)
+        port = _endpoint.proxy_port(env)
+        timeout = _endpoint.probe_timeout(_DEFAULT_PROBE_TIMEOUT_S, env)
 
         def answered() -> bool:
             with urlopen(base_url + "/health", timeout=timeout) as response:
@@ -115,7 +110,7 @@ def main(argv: list[str] | None = None) -> int:
 
         def healthy() -> bool:
             # Bounded in wall-clock time, not only per network operation.
-            return bool(bounded_call(answered, timeout))
+            return bool(_endpoint.bounded_call(answered, timeout))
 
         if not healthy():
             executable, *flags = python_spawn_prefix()

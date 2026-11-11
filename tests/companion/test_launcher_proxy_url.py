@@ -244,8 +244,8 @@ def test_probe_timeouts_default_to_each_launchers_value(isolated, monkeypatch):
     posix: list[float] = []
     with patch("urllib.request.urlopen", side_effect=_answer([], posix)):
         codex_launcher._local_proxy_is_healthy()
-    assert codex_win == [windows_launcher.DEFAULT_PROBE_TIMEOUT_S]
-    assert claude_win == [windows_claude.DEFAULT_PROBE_TIMEOUT_S]
+    assert codex_win == [windows_launcher._DEFAULT_PROBE_TIMEOUT_S]
+    assert claude_win == [windows_claude._DEFAULT_PROBE_TIMEOUT_S]
     assert posix == [codex_launcher._DEFAULT_PROBE_TIMEOUT_S]
 
 
