@@ -17,6 +17,12 @@ from pathlib import Path
 from urllib.request import urlopen
 
 from tokenpak import _paths
+from tokenpak.companion._proxy_endpoint import (
+    bounded_call,
+    probe_timeout,
+    proxy_base_url,
+    proxy_port,
+)
 from tokenpak.companion._python_spawn import python_spawn_prefix
 from tokenpak.companion.codex.mcp_config import SERVER_NAME
 from tokenpak.status.binding import ENV, create_launch_dir
@@ -24,6 +30,9 @@ from tokenpak.status.binding import ENV, create_launch_dir
 # Name of the model provider this launcher defines for each session through
 # ``-c`` overrides; it routes Codex to the local TokenPak proxy.
 MODEL_PROVIDER = "tokenpak_local"
+# Seconds one proxy health probe may take, unless
+# TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS sets another value at launch.
+DEFAULT_PROBE_TIMEOUT_S = 3.0
 
 
 def split_overrides(args: list[str]) -> tuple[list[str], list[str]]:
@@ -93,16 +102,20 @@ def main(argv: list[str] | None = None) -> int:
         home = Path(env.get("TOKENPAK_HOME", str(_paths.home())))
         env["TOKENPAK_HOME"] = str(home)
         env["PYTHONUTF8"] = "1"
-        port = int(env.get("TOKENPAK_PORT", "8766"))
-        base_url = f"http://127.0.0.1:{port}"
+        # The same resolution every TokenPak launcher uses, read from this
+        # launch's environment (caller plus local profile).
+        base_url = proxy_base_url(env)
+        port = proxy_port(env)
+        timeout = probe_timeout(DEFAULT_PROBE_TIMEOUT_S, env)
+
+        def answered() -> bool:
+            with urlopen(base_url + "/health", timeout=timeout) as response:
+                health = json.load(response)
+            return health.get("status") == "ok" and bool(health.get("version"))
 
         def healthy() -> bool:
-            try:
-                with urlopen(base_url + "/health", timeout=3) as response:
-                    health = json.load(response)
-                return health.get("status") == "ok" and bool(health.get("version"))
-            except (OSError, ValueError):
-                return False
+            # Bounded in wall-clock time, not only per network operation.
+            return bool(bounded_call(answered, timeout))
 
         if not healthy():
             executable, *flags = python_spawn_prefix()

@@ -18,7 +18,7 @@ What the user sees:
       📦 TokenPak Claude Companion
          TokenPak v1.8.0
          Ready • Mode: Balanced • Budget: Unlimited
-         Proxy active → http://localhost:8766
+         Proxy active → http://127.0.0.1:8766
 
          Your API bill called. It's crying.
 
@@ -42,6 +42,7 @@ from typing import Any, TextIO
 
 from .._formatting.colors import Color
 from . import _style
+from ._proxy_endpoint import proxy_base_url
 from ._python_spawn import python_spawn_prefix
 from .config import CompanionConfig
 
@@ -252,7 +253,7 @@ def main(args: list[str] | None = None) -> int:
 
     proxy_url = config.proxy_url
     if not proxy_url:
-        default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
+        default_proxy = proxy_base_url()
         try:
             import httpx
 
@@ -347,7 +348,7 @@ def main(args: list[str] | None = None) -> int:
     # them (this was the root cause of the abandoned OSC-0 tab-title attempt).
     writer = None
     if show_display and os.name != "nt":
-        env["TOKENPAK_FORECAST_PROXY"] = proxy_url or "http://127.0.0.1:8766"
+        env["TOKENPAK_FORECAST_PROXY"] = proxy_url or proxy_base_url()
         env["TOKENPAK_FORECAST_ROUTING"] = "proxy" if proxy_url else "unknown"
         try:
             writer = display.start_writer(env)
