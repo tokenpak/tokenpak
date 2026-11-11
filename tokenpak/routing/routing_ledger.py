@@ -89,31 +89,33 @@ class RoutingLedger:
         Path(self.db_path).parent.mkdir(parents=True, exist_ok=True)
         with self._lock:
             conn = self._connect()
-            # Enable WAL mode for concurrent reads
-            conn.execute("PRAGMA journal_mode=WAL")
-            conn.execute(f"PRAGMA wal_autocheckpoint={_WAL_AUTOCHECKPOINT}")
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS transactions (
-                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                    timestamp        TEXT    NOT NULL,
-                    model_used       TEXT    NOT NULL,
-                    task_type        TEXT    NOT NULL DEFAULT 'UNKNOWN',
-                    complexity_score REAL    NOT NULL DEFAULT 0.0,
-                    context_tokens   INTEGER NOT NULL DEFAULT 0,
-                    context_weight   REAL    NOT NULL DEFAULT 0.0,
-                    response_tokens  INTEGER NOT NULL DEFAULT 0,
-                    accepted         INTEGER,          -- NULL=unreviewed, 1=accepted, 0=rejected
-                    rejection_reason TEXT,
-                    latency_ms       REAL    NOT NULL DEFAULT 0.0,
-                    query_preview    TEXT,             -- first 200 chars of query
-                    routing_action   TEXT    DEFAULT 'passthrough'
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_ts    ON transactions(timestamp)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_model ON transactions(model_used)")
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_type  ON transactions(task_type)")
-            conn.commit()
-            conn.close()
+            try:
+                # Enable WAL mode for concurrent reads
+                conn.execute("PRAGMA journal_mode=WAL")
+                conn.execute(f"PRAGMA wal_autocheckpoint={_WAL_AUTOCHECKPOINT}")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS transactions (
+                        id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                        timestamp        TEXT    NOT NULL,
+                        model_used       TEXT    NOT NULL,
+                        task_type        TEXT    NOT NULL DEFAULT 'UNKNOWN',
+                        complexity_score REAL    NOT NULL DEFAULT 0.0,
+                        context_tokens   INTEGER NOT NULL DEFAULT 0,
+                        context_weight   REAL    NOT NULL DEFAULT 0.0,
+                        response_tokens  INTEGER NOT NULL DEFAULT 0,
+                        accepted         INTEGER,          -- NULL=unreviewed, 1=accepted, 0=rejected
+                        rejection_reason TEXT,
+                        latency_ms       REAL    NOT NULL DEFAULT 0.0,
+                        query_preview    TEXT,             -- first 200 chars of query
+                        routing_action   TEXT    DEFAULT 'passthrough'
+                    )
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_ts    ON transactions(timestamp)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_model ON transactions(model_used)")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_type  ON transactions(task_type)")
+                conn.commit()
+            finally:
+                conn.close()
 
     # ------------------------------------------------------------------
     # Write
@@ -160,6 +162,7 @@ class RoutingLedger:
         query_preview = query[:200] if query else ""
 
         with self._lock:
+            conn = None
             try:
                 conn = self._connect()
                 cur = conn.execute(
@@ -188,7 +191,6 @@ class RoutingLedger:
                 )
                 row_id = cur.lastrowid
                 conn.commit()
-                conn.close()
             except sqlite3.OperationalError as exc:
                 self._write_errors += 1
                 logger.warning(
@@ -197,6 +199,9 @@ class RoutingLedger:
                     exc,
                 )
                 return -1
+            finally:
+                if conn is not None:
+                    conn.close()
         assert row_id is not None
         return row_id
 
@@ -216,6 +221,7 @@ class RoutingLedger:
         """
         accepted_int = 1 if accepted else 0
         with self._lock:
+            conn = None
             try:
                 conn = self._connect()
                 cur = conn.execute(
@@ -228,7 +234,6 @@ class RoutingLedger:
                 )
                 updated = cur.rowcount > 0
                 conn.commit()
-                conn.close()
             except sqlite3.OperationalError as exc:
                 self._write_errors += 1
                 logger.warning(
@@ -237,6 +242,9 @@ class RoutingLedger:
                     exc,
                 )
                 return False
+            finally:
+                if conn is not None:
+                    conn.close()
         return updated
 
     # ------------------------------------------------------------------
@@ -246,83 +254,97 @@ class RoutingLedger:
     def get_transaction(self, transaction_id: int) -> Optional[dict[str, object]]:
         """Fetch a single transaction by ID."""
         conn = self._connect()
-        row = conn.execute("SELECT * FROM transactions WHERE id = ?", (transaction_id,)).fetchone()
-        conn.close()
-        return dict(row) if row else None
+        try:
+            row = conn.execute(
+                "SELECT * FROM transactions WHERE id = ?", (transaction_id,)
+            ).fetchone()
+            return dict(row) if row else None
+        finally:
+            conn.close()
 
     def get_recent(self, limit: int = 100) -> list[dict[str, object]]:
         """Return the most recent N transactions."""
         conn = self._connect()
-        rows = conn.execute(
-            "SELECT * FROM transactions ORDER BY id DESC LIMIT ?", (limit,)
-        ).fetchall()
-        conn.close()
-        return [dict(r) for r in rows]
+        try:
+            rows = conn.execute(
+                "SELECT * FROM transactions ORDER BY id DESC LIMIT ?", (limit,)
+            ).fetchall()
+            return [dict(r) for r in rows]
+        finally:
+            conn.close()
 
     def get_stats(self) -> dict[str, object]:
         """Return aggregate statistics from the ledger."""
         conn = self._connect()
-        row = conn.execute("""
-            SELECT
-                COUNT(*)                                AS total,
-                SUM(CASE WHEN accepted=1 THEN 1 ELSE 0 END) AS accepted,
-                SUM(CASE WHEN accepted=0 THEN 1 ELSE 0 END) AS rejected,
-                SUM(CASE WHEN accepted IS NULL THEN 1 ELSE 0 END) AS unreviewed,
-                AVG(complexity_score)                   AS avg_complexity,
-                AVG(latency_ms)                         AS avg_latency_ms,
-                AVG(context_tokens)                     AS avg_context_tokens
-            FROM transactions
-        """).fetchone()
-        model_counts = conn.execute("""
-            SELECT model_used, COUNT(*) AS n FROM transactions GROUP BY model_used
-        """).fetchall()
-        type_counts = conn.execute("""
-            SELECT task_type, COUNT(*) AS n FROM transactions GROUP BY task_type
-        """).fetchall()
-        conn.close()
+        try:
+            row = conn.execute("""
+                SELECT
+                    COUNT(*)                                AS total,
+                    SUM(CASE WHEN accepted=1 THEN 1 ELSE 0 END) AS accepted,
+                    SUM(CASE WHEN accepted=0 THEN 1 ELSE 0 END) AS rejected,
+                    SUM(CASE WHEN accepted IS NULL THEN 1 ELSE 0 END) AS unreviewed,
+                    AVG(complexity_score)                   AS avg_complexity,
+                    AVG(latency_ms)                         AS avg_latency_ms,
+                    AVG(context_tokens)                     AS avg_context_tokens
+                FROM transactions
+            """).fetchone()
+            model_counts = conn.execute("""
+                SELECT model_used, COUNT(*) AS n FROM transactions GROUP BY model_used
+            """).fetchall()
+            type_counts = conn.execute("""
+                SELECT task_type, COUNT(*) AS n FROM transactions GROUP BY task_type
+            """).fetchall()
 
-        stats = dict(row) if row else {}
-        stats["by_model"] = {r["model_used"]: r["n"] for r in model_counts}
-        stats["by_task_type"] = {r["task_type"]: r["n"] for r in type_counts}
-        return stats
+            stats = dict(row) if row else {}
+            stats["by_model"] = {r["model_used"]: r["n"] for r in model_counts}
+            stats["by_task_type"] = {r["task_type"]: r["n"] for r in type_counts}
+            return stats
+        finally:
+            conn.close()
 
     def sample_count(self, model: str, task_type: str) -> int:
         """Return number of transactions for (model, task_type) with known outcome."""
         conn = self._connect()
-        row = conn.execute(
-            """
-            SELECT COUNT(*) FROM transactions
-            WHERE model_used = ? AND task_type = ? AND accepted IS NOT NULL
-        """,
-            (model, task_type),
-        ).fetchone()
-        conn.close()
-        return row[0] if row else 0
+        try:
+            row = conn.execute(
+                """
+                SELECT COUNT(*) FROM transactions
+                WHERE model_used = ? AND task_type = ? AND accepted IS NOT NULL
+            """,
+                (model, task_type),
+            ).fetchone()
+            return row[0] if row else 0
+        finally:
+            conn.close()
 
     def acceptance_rate(self, model: str, task_type: str) -> float:
         """Return acceptance rate for (model, task_type). Returns 0.0 if no data."""
         conn = self._connect()
-        row = conn.execute(
-            """
-            SELECT
-                SUM(CASE WHEN accepted=1 THEN 1 ELSE 0 END) AS wins,
-                COUNT(*) AS total
-            FROM transactions
-            WHERE model_used = ? AND task_type = ? AND accepted IS NOT NULL
-        """,
-            (model, task_type),
-        ).fetchone()
-        conn.close()
-        if not row or row["total"] == 0:
-            return 0.0
-        return float(row["wins"]) / float(row["total"])
+        try:
+            row = conn.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN accepted=1 THEN 1 ELSE 0 END) AS wins,
+                    COUNT(*) AS total
+                FROM transactions
+                WHERE model_used = ? AND task_type = ? AND accepted IS NOT NULL
+            """,
+                (model, task_type),
+            ).fetchone()
+            if not row or row["total"] == 0:
+                return 0.0
+            return float(row["wins"]) / float(row["total"])
+        finally:
+            conn.close()
 
     def wal_mode_active(self) -> bool:
         """Return True if WAL journal mode is active."""
         conn = self._connect()
-        row = conn.execute("PRAGMA journal_mode").fetchone()
-        conn.close()
-        return row[0].lower() == "wal" if row else False
+        try:
+            row = conn.execute("PRAGMA journal_mode").fetchone()
+            return row[0].lower() == "wal" if row else False
+        finally:
+            conn.close()
 
     # ------------------------------------------------------------------
     # Internals

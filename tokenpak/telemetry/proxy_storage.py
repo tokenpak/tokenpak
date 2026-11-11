@@ -7,6 +7,8 @@ import threading
 from datetime import datetime
 from typing import Any, Optional, cast
 
+from tokenpak._sqlite_lifecycle import ThreadConnection as _ThreadConnection
+
 from .proxy_collector import RequestStats, SessionStats
 
 _DDL = """
@@ -55,6 +57,8 @@ class TelemetryStorage:
         if not hasattr(self._local, "conn") or self._local.conn is None:
             self._local.conn = sqlite3.connect(self._path, check_same_thread=False)
             self._local.conn.row_factory = sqlite3.Row
+            # Closes this thread's connection when the thread exits.
+            self._local.closer = _ThreadConnection(self._local.conn)
         return cast(sqlite3.Connection, self._local.conn)
 
     def _init_db(self) -> None:
