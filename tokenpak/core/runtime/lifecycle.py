@@ -121,16 +121,9 @@ def pid_alive(pid: Optional[int]) -> bool:
     """True when *pid* names a live process this user can signal."""
     if not pid or pid <= 0:
         return False
-    try:
-        os.kill(pid, 0)
-        return True
-    except ProcessLookupError:
-        return False
-    except PermissionError:
-        # Exists but owned by another user — alive, though not ours to manage.
-        return True
-    except OSError:
-        return False
+    from tokenpak.platform import process
+
+    return process.pid_alive(pid)
 
 
 def port_in_use(port: int, host: str = "127.0.0.1") -> bool:

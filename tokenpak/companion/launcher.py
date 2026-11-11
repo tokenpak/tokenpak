@@ -18,7 +18,7 @@ What the user sees:
       📦 TokenPak Claude Companion
          TokenPak v1.8.0
          Ready • Mode: Balanced • Budget: Unlimited
-         Proxy active → http://localhost:8766
+         Proxy active → http://127.0.0.1:8766
 
          Your API bill called. It's crying.
 
@@ -33,6 +33,7 @@ import random
 import re
 import shlex
 import shutil
+import subprocess
 import sys
 import tempfile
 import unicodedata
@@ -40,6 +41,7 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from .._formatting.colors import Color
+from . import _proxy_endpoint as _endpoint
 from . import _style
 from ._python_spawn import python_spawn_prefix
 from .config import CompanionConfig
@@ -179,6 +181,13 @@ def main(args: list[str] | None = None) -> int:
     """Entry point for ``tokenpak claude``."""
     args = args if args is not None else sys.argv[1:]
 
+    if os.name == "nt":
+        from .windows_claude import prepare_environment
+
+        prepare_environment()
+        if args in (["--help"], ["-h"], ["--version"], ["-v"]):
+            return subprocess.call([shutil.which("claude.exe") or "claude.exe", *args])
+
     from tokenpak.status.binding import ENV as session_dir_env
 
     from .statusline import launch as display
@@ -201,7 +210,7 @@ def main(args: list[str] | None = None) -> int:
         return 2
     if show_display and surface == "auto" and display.user_statusline(args):
         show_display = False
-    if show_display:
+    if show_display and os.name != "nt":
         display.preflight("native")
 
     # Keep durable run state at the existing path, but give each Claude launch
@@ -244,7 +253,7 @@ def main(args: list[str] | None = None) -> int:
 
     proxy_url = config.proxy_url
     if not proxy_url:
-        default_proxy = os.environ.get("TOKENPAK_PROXY_URL", "http://localhost:8766")
+        default_proxy = _endpoint.proxy_base_url()
         try:
             import httpx
 
@@ -338,8 +347,8 @@ def main(args: list[str] | None = None) -> int:
     # Claude Code repaints the title on its own render loop and would clobber
     # them (this was the root cause of the abandoned OSC-0 tab-title attempt).
     writer = None
-    if show_display:
-        env["TOKENPAK_FORECAST_PROXY"] = proxy_url or "http://127.0.0.1:8766"
+    if show_display and os.name != "nt":
+        env["TOKENPAK_FORECAST_PROXY"] = proxy_url or _endpoint.proxy_base_url()
         env["TOKENPAK_FORECAST_ROUTING"] = "proxy" if proxy_url else "unknown"
         try:
             writer = display.start_writer(env)
@@ -349,6 +358,9 @@ def main(args: list[str] | None = None) -> int:
                 file=sys.stderr,
             )
     try:
+        if os.name == "nt":
+            claude_args[0] = shutil.which("claude.exe") or "claude.exe"
+            return subprocess.call(claude_args, env=env)
         os.execvpe("claude", claude_args, env)
     finally:
         # Successful exec preserves this PID; its writer exits when Claude exits.
@@ -682,7 +694,7 @@ def _write_settings(
     # Entries are separated by the platform path separator (``:`` on POSIX,
     # ``;`` on Windows), matching the convention used by ``$PATH``.
     add_dirs = permissions.setdefault("additionalDirectories", [])
-    candidates: list[Path] = [Path.home() / "vault"]
+    candidates: list[Path] = [] if os.name == "nt" else [Path.home() / "vault"]
     extra = os.environ.get("TOKENPAK_COMPANION_EXTRA_DIRS", "")
     for entry in (s.strip() for s in extra.split(os.pathsep) if s.strip()):
         path = Path(entry)
@@ -730,13 +742,28 @@ def _write_settings(
             "refreshInterval": 2,
         }
 
+    if os.name == "nt":
+        from .windows_claude import configure_native_settings
+
+        configure_native_settings(
+            settings,
+            config,
+            run_dir,
+            status_line=status_line,
+            replaced_commands={
+                hook_cmd,
+                session_name_cmd,
+                shlex.join(["bash", str(hooks_dir / "session_bind.sh")]),
+            },
+        )
+
     path = generated_dir / "settings.json"
-    path.write_text(json.dumps(settings, indent=2))
+    path.write_text(json.dumps(settings, indent=2), encoding="utf-8")
     return str(path)
 
 
 def _write_system_prompt(config: CompanionConfig, *, run_dir: Path | None = None) -> str:
     """Write the prompt fragment, adding style guidance only for lean."""
     path = _generated_dir(config, run_dir) / "companion-prompt.md"
-    path.write_text(_SYSTEM_PROMPT + _style.directive(config.style))
+    path.write_text(_SYSTEM_PROMPT + _style.directive(config.style), encoding="utf-8")
     return str(path)

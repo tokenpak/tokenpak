@@ -37,6 +37,7 @@ EXCLUDED = {
     "incidents.log": "append-only log (auth_guard); logs are never carried",
     "scripts": "operator-supplied scripts looked up by swap_alert; TokenPak never writes it",
     ".env": "user-owned env file; config_env only checks its permissions",
+    "windows-env.json": "operator-written Windows path profile; the native launchers only read it",
     "cards": "named only in the uninstall purge list; no product code writes it",
 }
 
