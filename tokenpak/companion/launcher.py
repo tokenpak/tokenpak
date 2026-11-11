@@ -42,8 +42,8 @@ from pathlib import Path
 from typing import Any, TextIO
 
 from .._formatting.colors import Color
+from . import _proxy_endpoint as _endpoint
 from . import _style
-from ._proxy_endpoint import PROBE_TIMEOUT_ENV, bounded_call, proxy_base_url, seconds_setting
 from ._python_spawn import python_spawn_prefix
 from .config import CompanionConfig
 
@@ -190,7 +190,7 @@ injects is wrapped in `[PAK ...]` envelopes.
 
 _DIRECT_START_ENV = "TOKENPAK_ALLOW_DIRECT"
 _PROXY_WAIT_ENV = "TOKENPAK_PROXY_WAIT_SECONDS"
-_PROBE_TIMEOUT_ENV = PROBE_TIMEOUT_ENV
+_PROBE_TIMEOUT_ENV = _endpoint.PROBE_TIMEOUT_ENV
 _PROBE_INTERVAL_ENV = "TOKENPAK_PROXY_PROBE_INTERVAL_SECONDS"
 _DEFAULT_PROXY_WAIT_S = 10.0
 _DEFAULT_PROBE_TIMEOUT_S = 1.0
@@ -205,7 +205,7 @@ _EXIT_RUNTIME_UNAVAILABLE = 7
 
 def _env_seconds(name: str, default: float, *, allow_zero: bool = True) -> float:
     """A finite, non-negative duration from the environment, else *default*."""
-    return seconds_setting(name, default, allow_zero=allow_zero)
+    return _endpoint.seconds_setting(name, default, allow_zero=allow_zero)
 
 
 def _default_proxy_url() -> str:
@@ -214,7 +214,7 @@ def _default_proxy_url() -> str:
     TOKENPAK_PROXY_URL, then TOKENPAK_PORT on the loopback address, then the
     default port.
     """
-    return proxy_base_url()
+    return _endpoint.proxy_base_url()
 
 
 def _direct_start_allowed() -> bool:
@@ -247,7 +247,7 @@ def _proxy_healthy(url: str, timeout: float) -> bool:
 
         return httpx.get(f"{url}/health", timeout=timeout).status_code == 200
 
-    return bool(bounded_call(answered, timeout))
+    return bool(_endpoint.bounded_call(answered, timeout))
 
 
 def _wait_for_proxy(
