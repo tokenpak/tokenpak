@@ -404,6 +404,32 @@ def current_paths(
     )
 
 
+# Windows has no POSIX permission bits. ``os.fchmod`` is missing before Python
+# 3.13 and, where present, only toggles the read-only flag, so ``st_mode``
+# reports 0o666 or 0o444 whoever may open the file; access there is governed
+# by the profile directory's ACLs. Permission bits are therefore applied and
+# compared only on platforms that have them. Everything else (regular-file,
+# link-count, owner and inode checks) applies everywhere.
+_WINDOWS = os.name == "nt"
+
+
+def _restrict_mode(fd: int, mode: int) -> None:
+    """Set POSIX permission bits on *fd* where the platform has them."""
+    fchmod = getattr(os, "fchmod", None)
+    if not _WINDOWS and fchmod is not None:
+        fchmod(fd, mode)
+
+
+def _mode_is(st_mode: int, expected: int) -> bool:
+    """Whether the permission bits are *expected*; always true without POSIX modes."""
+    return _WINDOWS or stat.S_IMODE(st_mode) == expected
+
+
+def _shares_access(st_mode: int) -> bool:
+    """Whether group or other may access the file; never true without POSIX modes."""
+    return not _WINDOWS and bool(st_mode & 0o077)
+
+
 def _entry_stat(name: str, dir_fd: int) -> os.stat_result | None:
     """Return an entry's no-follow stat relative to a validated home."""
     try:
@@ -448,7 +474,7 @@ def _mkdir_open_owned_at(
         raise HomeInUseError(f"selected CODEX_HOME ancestor is unsafe: {path}") from exc
     try:
         if created:
-            os.fchmod(fd, 0o700)
+            _restrict_mode(fd, 0o700)
             allowed = {0o700}
         else:
             allowed = existing_modes
@@ -471,7 +497,7 @@ def _open_selected_home(paths: SessionPaths) -> int | None:
     directory_flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     if paths.mode == MODE_SHARED:
         paths.home.mkdir(mode=0o700, parents=True, exist_ok=True)
-        if os.name == "nt":  # Windows CRT cannot open directory descriptors.
+        if _WINDOWS:  # Windows CRT cannot open directory descriptors.
             entry = paths.home.lstat()
             if not stat.S_ISDIR(entry.st_mode) or paths.home.is_symlink():
                 raise HomeInUseError(f"selected CODEX_HOME is not a directory: {paths.home}")
@@ -495,7 +521,7 @@ def _open_selected_home(paths: SessionPaths) -> int | None:
         )
         try:
             if root_created:
-                os.fchmod(current_fd, 0o700)
+                _restrict_mode(current_fd, 0o700)
             _owned_directory(current_fd, private_root, allowed_modes={0o700})
 
             relative_parent = paths.home.parent.relative_to(private_root)
@@ -559,7 +585,7 @@ def _read_bounded_regular(
             getuid = getattr(os, "geteuid", None)
             if getuid is not None and source_stat.st_uid != getuid():
                 return None
-            if source_stat.st_mode & 0o077:
+            if _shares_access(source_stat.st_mode):
                 return None
         chunks: list[bytes] = []
         total = 0
@@ -629,7 +655,7 @@ def _replace_private_at(dir_fd: int, name: str, data: bytes) -> None:
     flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp_name, flags, 0o600, dir_fd=dir_fd)
     try:
-        os.fchmod(fd, 0o600)
+        _restrict_mode(fd, 0o600)
         _write_all(fd, data)
         os.fsync(fd)
     finally:
@@ -667,7 +693,7 @@ def _provision_config(src: Path, dir_fd: int, name: str) -> bool:
     sanitized = _sanitized_config(current)
     if sanitized is None:
         raise RuntimeError(f"selected config is not safe UTF-8 TOML: {name}")
-    if sanitized != current or existing.st_mode & 0o777 != 0o600:
+    if sanitized != current or not _mode_is(existing.st_mode, 0o600):
         _replace_private_at(dir_fd, name, sanitized)
     return False
 
@@ -1008,7 +1034,7 @@ def _open_managed_sessions_root(
     current_path = tokenpak_root
     try:
         if root_created:
-            os.fchmod(current_fd, 0o700)
+            _restrict_mode(current_fd, 0o700)
         _owned_directory(current_fd, current_path, allowed_modes={0o700})
         for component, modes in (
             ("companion", {0o700, 0o775}),
@@ -1170,7 +1196,7 @@ def _inspect_sentinel_temp_artifacts(
                 if (
                     not stat.S_ISREG(info.st_mode)
                     or info.st_nlink != 1
-                    or stat.S_IMODE(info.st_mode) != 0o600
+                    or not _mode_is(info.st_mode, 0o600)
                     or (getuid is not None and info.st_uid != getuid())
                 ):
                     unsafe = True
@@ -1462,12 +1488,12 @@ def _lease_guard(home: Path, *, home_fd: int | None = None) -> Iterator[None]:
     guard_info = os.fstat(fd)
     getuid = getattr(os, "geteuid", None)
     if guard_stat is None:
-        os.fchmod(fd, 0o600)
+        _restrict_mode(fd, 0o600)
         guard_info = os.fstat(fd)
     if (
         not stat.S_ISREG(guard_info.st_mode)
         or guard_info.st_nlink != 1
-        or stat.S_IMODE(guard_info.st_mode) != 0o600
+        or not _mode_is(guard_info.st_mode, 0o600)
         or (getuid is not None and guard_info.st_uid != getuid())
     ):
         os.close(fd)
@@ -1512,9 +1538,7 @@ def _retention_guard(root: Path, root_fd: int) -> Iterator[None]:
     """Serialize isolated-home publication and cleanup across processes."""
     entry = _entry_stat(_RETENTION_GUARD_NAME, root_fd)
     if entry is not None and (
-        not stat.S_ISREG(entry.st_mode)
-        or entry.st_nlink != 1
-        or stat.S_IMODE(entry.st_mode) != 0o600
+        not stat.S_ISREG(entry.st_mode) or entry.st_nlink != 1 or not _mode_is(entry.st_mode, 0o600)
     ):
         raise HomeInUseError(f"unsafe retention guard: {root / _RETENTION_GUARD_NAME}")
     fd = os.open(
@@ -1527,12 +1551,12 @@ def _retention_guard(root: Path, root_fd: int) -> Iterator[None]:
         info = os.fstat(fd)
         getuid = getattr(os, "geteuid", None)
         if entry is None:
-            os.fchmod(fd, 0o600)
+            _restrict_mode(fd, 0o600)
             info = os.fstat(fd)
         if (
             not stat.S_ISREG(info.st_mode)
             or info.st_nlink != 1
-            or stat.S_IMODE(info.st_mode) != 0o600
+            or not _mode_is(info.st_mode, 0o600)
             or (getuid is not None and info.st_uid != getuid())
         ):
             raise HomeInUseError(f"unsafe retention guard: {root / _RETENTION_GUARD_NAME}")
@@ -1556,7 +1580,7 @@ def _append_retention_receipt(root_fd: int, payload: dict[str, object]) -> None:
     if entry is not None and (
         not stat.S_ISREG(entry.st_mode)
         or entry.st_nlink != 1
-        or stat.S_IMODE(entry.st_mode) != 0o600
+        or not _mode_is(entry.st_mode, 0o600)
         or (getuid is not None and entry.st_uid != getuid())
     ):
         raise HomeInUseError("unsafe retention receipt file")
@@ -1569,12 +1593,12 @@ def _append_retention_receipt(root_fd: int, payload: dict[str, object]) -> None:
     try:
         info = os.fstat(fd)
         if entry is None:
-            os.fchmod(fd, 0o600)
+            _restrict_mode(fd, 0o600)
             info = os.fstat(fd)
         if (
             not stat.S_ISREG(info.st_mode)
             or info.st_nlink != 1
-            or stat.S_IMODE(info.st_mode) != 0o600
+            or not _mode_is(info.st_mode, 0o600)
             or (getuid is not None and info.st_uid != getuid())
         ):
             raise HomeInUseError("unsafe retention receipt file")
@@ -1596,7 +1620,7 @@ def _read_retention_receipts(root_fd: int) -> tuple[dict[str, object], ...]:
     if (
         not stat.S_ISREG(entry.st_mode)
         or entry.st_nlink != 1
-        or stat.S_IMODE(entry.st_mode) != 0o600
+        or not _mode_is(entry.st_mode, 0o600)
         or entry.st_size > _RETENTION_MAX_RECEIPT_BYTES
         or (getuid is not None and entry.st_uid != getuid())
     ):
@@ -2111,7 +2135,7 @@ def _create_sentinel_temp(
     flags = os.O_RDWR | os.O_CREAT | os.O_EXCL | getattr(os, "O_NOFOLLOW", 0)
     fd = os.open(tmp_target, flags, 0o600, dir_fd=dir_fd)
     try:
-        os.fchmod(fd, 0o600)
+        _restrict_mode(fd, 0o600)
         _write_all(fd, payload)
         os.fsync(fd)
         os.lseek(fd, 0, os.SEEK_SET)
@@ -2220,7 +2244,7 @@ def _unlink_owned_sentinel_temp(
     if (
         not stat.S_ISREG(entry.st_mode)
         or entry.st_nlink != 1
-        or stat.S_IMODE(entry.st_mode) != 0o600
+        or not _mode_is(entry.st_mode, 0o600)
         or (entry.st_dev, entry.st_ino) != expected_identity
     ):
         raise HomeInUseError(f"handoff marker changed during launch: {path.parent / name}")
@@ -2285,7 +2309,7 @@ def _recover_sentinel_temps(
         if (
             not stat.S_ISREG(entry_stat.st_mode)
             or entry_stat.st_nlink != 1
-            or stat.S_IMODE(entry_stat.st_mode) != 0o600
+            or not _mode_is(entry_stat.st_mode, 0o600)
             or (getuid is not None and entry_stat.st_uid != getuid())
         ):
             raise HomeInUseError(f"unsafe sentinel recovery artifact: {path.parent / name}")
