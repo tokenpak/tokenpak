@@ -29,21 +29,33 @@ This project follows [Semantic Versioning](https://semver.org/).
   when its session ends or stays inactive. (#368)
 - The Windows launchers for Claude and Codex ship in the package. They existed
   only as local patches, so a reinstall or upgrade removed the entry point
-  Windows sessions start through. Each starts the local proxy when it is not
-  healthy and exits non-zero if it still is not. Linux and macOS are
-  unchanged. (#370)
+  Windows sessions start through. Each starts the local proxy on the
+  configured port when it is not healthy and exits non-zero if it still is
+  not. (#370)
+- Every launcher, Claude and Codex on Windows, Linux and macOS, now routes
+  through the same configured proxy address: `TOKENPAK_PROXY_URL`, else
+  `TOKENPAK_PORT` on `127.0.0.1`, else the default port. The Windows Codex
+  launcher ignored `TOKENPAK_PROXY_URL`, `tokenpak claude` ignored
+  `TOKENPAK_PORT`, and `tokenpak codex` used a fixed address. Launch health
+  probes take their timeout from `TOKENPAK_PROXY_PROBE_TIMEOUT_SECONDS` (each
+  launcher keeps its previous default) and are bounded in wall-clock time.
+  (#370)
 - The Codex session lease for your own Codex home no longer fails on Windows.
   It called a POSIX-only permission function and compared POSIX permission
   bits, which Windows does not have; both now apply only where the platform has
   them. (#372)
 - The proxy no longer refuses all of a provider's traffic because several
   sessions started at once. Claude Code opens each session with a one-token
-  check, and a 429 reply to it opened the shared 429 breaker after five
-  session starts in a minute. Those replies are now counted separately
-  (`startup_check_429s_ignored` in `/circuit-breakers`) and never open the
-  circuit; the client still receives them unchanged.
-  `TOKENPAK_RATE_LIMIT_STARTUP_CHECK_MAX_TOKENS` (default 1, 0 to disable)
-  sets what counts as a startup check. (#373)
+  check, and a refusal of that check counted toward the shared provider
+  breaker, so five session starts in a minute opened it. The first such check
+  from each identified client session is now counted separately instead: at
+  most once per session per hour, and at most 60 times per provider per hour.
+  Both bounds and the startup-check size are settings, listed with the other
+  breaker settings in `tokenpak/proxy/circuit_breaker.py`. A check without a
+  session identity, a repeat from the same session and every other request
+  count exactly as before. Session identities are held only as keyed digests,
+  the client still receives the provider's reply unchanged, and
+  `/circuit-breakers` reports the exempted checks. (#373)
 
 ### Changed
 
@@ -52,10 +64,15 @@ This project follows [Semantic Versioning](https://semver.org/).
   directly, with no spend guard or telemetry and no message. It now keeps
   probing for up to `TOKENPAK_PROXY_WAIT_SECONDS` (default 10), then exits with
   code 7 and one line that names the URL, `tokenpak start` and the override.
-  Set `TOKENPAK_ALLOW_DIRECT=1` to start Claude without the proxy; the banner
-  then says so. An `ANTHROPIC_BASE_URL` you export yourself is still used
-  without waiting. `tokenpak claude` now exits with the launcher's status
-  instead of 0. (#371)
+  The wait holds however the proxy answers: each probe ends at its timeout or
+  at the end of the wait, whichever comes first, so a proxy that answers
+  slowly cannot extend it. Set `TOKENPAK_ALLOW_DIRECT=1` to start Claude
+  without the proxy; the banner then says so. An `ANTHROPIC_BASE_URL` you
+  export yourself is still used without waiting. `tokenpak claude` now exits
+  with the launcher's status instead of 0. (#371)
+- The default proxy address the launchers use is now `http://127.0.0.1:8766`,
+  the proxy's default listen address, instead of `http://localhost:8766`. Set
+  `TOKENPAK_PROXY_URL` to use another address. (#370, #371)
 
 ### Compatibility
 
