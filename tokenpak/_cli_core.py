@@ -3118,6 +3118,8 @@ def cmd_claude(args: CommandArgs) -> None:
     forwarded = list(args.args)
     if forwarded[:1] == ["--"]:
         forwarded = forwarded[1:]
+    # Exec replaces this process on success; a returned status is a refusal
+    # (for example, no reachable proxy) and must reach the shell.
     sys.exit(launch(args=forwarded))
 
 
