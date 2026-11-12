@@ -801,8 +801,30 @@ def run_doctor(
     # === Check 0: home-directory boundary ==========================================
     # Reports the resolved TokenPak home + flags legacy paths that should
     # be migrated. Cheap, side-effect-free, runs before everything else
-    # so the operator sees the boundary state up front.
-    if _paths.is_legacy_active():
+    # so the operator sees the boundary state up front. A recorded incomplete
+    # migration comes first: it is a fact about unresolved data, whichever home
+    # reads currently resolve to.
+    if _paths.is_migration_incomplete():
+        receipt = _paths.read_migration_receipt() or {}
+        when = str(receipt.get("migrated_at_utc", "an earlier run"))
+        left = _paths.migration_unresolved(receipt)
+        listed = receipt.get("unresolved")
+        entries = listed if isinstance(listed, list) else []
+        names = [str(e["path"]) for e in entries if isinstance(e, dict) and e.get("path")]
+        example = f" (for example {', '.join(names[:3])})" if names else ""
+        count = f"{left} unresolved" if left else "items unresolved"
+        _record(
+            "home_boundary",
+            "warn",
+            f"~/.tpk/ boundary    migration incomplete: {count}",
+            detail=(
+                f"The migration on {when} left items unresolved{example}, so "
+                f"{_paths.legacy_home()} may still hold the only copy of some data. Keep it. "
+                "Run `tokenpak home migrate` to see what needs review, resolve each item, then "
+                "run `tokenpak home migrate --apply` again."
+            ),
+        )
+    elif _paths.is_legacy_active():
         _record(
             "home_boundary",
             "warn",
@@ -859,8 +881,9 @@ def run_doctor(
             detail=(
                 f"Both {_paths.canonical_home()} and "
                 f"{_paths.legacy_home()} exist. Canonical wins. "
-                f"Once you've confirmed ~/.tpk/ is working, you can "
-                f"remove the legacy directory manually."
+                "Run `tokenpak home migrate` to see whether the legacy directory "
+                "holds anything ~/.tpk/ lacks, and keep it until a migration has "
+                "finished with nothing unresolved."
             ),
         )
     else:
@@ -869,6 +892,31 @@ def run_doctor(
             "pass",
             f"~/.tpk/ boundary    {tokenpak_dir}",
         )
+
+    # Settings only the legacy config.yaml holds are ignored once the canonical
+    # one exists. Name them, unless a migration already ran and the legacy file
+    # has not changed since (the user may have removed a setting on purpose).
+    if not _paths.is_legacy_active() and not os.environ.get(_paths.ENV_VAR, "").strip():
+        from tokenpak.cli.commands.home_migrate import shadowed_settings
+
+        shadowed = shadowed_settings(_paths.legacy_home(), _paths.canonical_home())
+        if shadowed and (
+            not _paths.is_migrated_home()
+            or "config.yaml" in _paths.legacy_written_since_migration(limit=1000)
+        ):
+            names = ", ".join(shadowed[:5]) + (
+                f" and {len(shadowed) - 5} more" if len(shadowed) > 5 else ""
+            )
+            _record(
+                "home_config",
+                "warn",
+                f"Ignored settings    {len(shadowed)} only in {_paths.legacy_home()}/config.yaml",
+                detail=(
+                    f"Only {_paths.canonical_home()}/config.yaml is read, so these are "
+                    f"not in effect: {names}. Run `tokenpak home migrate` to see the "
+                    "plan, then `tokenpak home migrate --apply` to add them."
+                ),
+            )
 
     # === Check 0b: custom-provider registration truth ===========================
     custom_configured, custom_registered, custom_provider_error = _custom_provider_counts()
