@@ -1,7 +1,7 @@
 {
   "version": "1.0",
-  "generated_at": "2026-10-09T04:53:21Z",
-  "package_version": "1.31.0",
+  "generated_at": "2026-11-10T20:55:55Z",
+  "package_version": "1.31.1",
   "symbols": [
     {
       "module": "tokenpak",
@@ -2416,6 +2416,42 @@
       "name": "uninstall_skills"
     },
     {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "ENV"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "MODEL_PROVIDER"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "SERVER_NAME"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "codex_binary"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "create_launch_dir"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "launch_environment"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "python_spawn_prefix"
+    },
+    {
+      "module": "tokenpak.companion.codex.windows_launcher",
+      "name": "split_overrides"
+    },
+    {
       "module": "tokenpak.companion.config",
       "name": "CompanionConfig"
     },
@@ -2442,6 +2478,26 @@
     {
       "module": "tokenpak.companion.hooks.pre_send",
       "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.hooks.windows_native",
+      "name": "ENV"
+    },
+    {
+      "module": "tokenpak.companion.hooks.windows_native",
+      "name": "handle"
+    },
+    {
+      "module": "tokenpak.companion.hooks.windows_native",
+      "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.hooks.windows_native",
+      "name": "valid_session"
+    },
+    {
+      "module": "tokenpak.companion.hooks.windows_native",
+      "name": "write_session"
     },
     {
       "module": "tokenpak.companion.journal.pak_aware",
@@ -3002,6 +3058,34 @@
     {
       "module": "tokenpak.companion.transcript.parser",
       "name": "parse_transcript"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "CompanionConfig"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "configure_native_settings"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "main"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "native_hook"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "prepare_environment"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "python_spawn_prefix"
+    },
+    {
+      "module": "tokenpak.companion.windows_claude",
+      "name": "status_command"
     },
     {
       "module": "tokenpak.compression",
@@ -9245,6 +9329,10 @@
     },
     {
       "module": "tokenpak.proxy.circuit_breaker",
+      "name": "is_startup_check"
+    },
+    {
+      "module": "tokenpak.proxy.circuit_breaker",
       "name": "provider_from_url"
     },
     {
@@ -11448,6 +11536,22 @@
       "name": "get_model_max_context"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.approvals",
+      "name": "ContextApprovals"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.approvals",
+      "name": "RiskEstimate"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.approvals",
+      "name": "TIPDirective"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.approvals",
+      "name": "scope_key"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.audit",
       "name": "EVENT_TYPES"
     },
@@ -11584,12 +11688,36 @@
       "name": "estimate"
     },
     {
+      "module": "tokenpak.proxy.spend_guard.estimator",
+      "name": "structural_tokens"
+    },
+    {
       "module": "tokenpak.proxy.spend_guard.intent",
       "name": "Intent"
     },
     {
       "module": "tokenpak.proxy.spend_guard.intent",
       "name": "parse_intent"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.media",
+      "name": "PDF_TEXT_TOKENS_PER_PAGE"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.media",
+      "name": "UNKNOWN_PDF_PAGES"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.media",
+      "name": "document_tokens"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.media",
+      "name": "image_dimensions"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.media",
+      "name": "image_tokens"
     },
     {
       "module": "tokenpak.proxy.spend_guard.orchestrator",
@@ -11970,6 +12098,22 @@
     {
       "module": "tokenpak.proxy.spend_guard.token_accounting",
       "name": "token_snapshot"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.usage_anchor",
+      "name": "UsageAnchor"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.usage_anchor",
+      "name": "projection_floor"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.usage_anchor",
+      "name": "record_completed"
+    },
+    {
+      "module": "tokenpak.proxy.spend_guard.usage_anchor",
+      "name": "reset_for_testing"
     },
     {
       "module": "tokenpak.proxy.startup",
@@ -14529,7 +14673,27 @@
     },
     {
       "module": "tokenpak.status.worker",
+      "name": "IDLE_REFRESH_SECONDS"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "InputWatch"
+    },
+    {
+      "module": "tokenpak.status.worker",
       "name": "MAX_AGE"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "POLL_SECONDS"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "SESSION_IDLE_SECONDS"
+    },
+    {
+      "module": "tokenpak.status.worker",
+      "name": "SessionLifetime"
     },
     {
       "module": "tokenpak.status.worker",
@@ -14557,6 +14721,10 @@
     },
     {
       "module": "tokenpak.status.worker",
+      "name": "marker_path"
+    },
+    {
+      "module": "tokenpak.status.worker",
       "name": "pending_version"
     },
     {
@@ -14570,10 +14738,6 @@
     {
       "module": "tokenpak.status.worker",
       "name": "run_dir"
-    },
-    {
-      "module": "tokenpak.status.worker",
-      "name": "valid_session"
     },
     {
       "module": "tokenpak.telemetry",
