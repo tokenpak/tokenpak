@@ -221,6 +221,7 @@ def _extract_model_performance(
     if not p.exists():
         return store["model_performance"]
 
+    conn = None
     try:
         conn = sqlite3.connect(str(p), check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -235,9 +236,11 @@ def _extract_model_performance(
             WHERE accepted IS NOT NULL
             GROUP BY model_used, task_type
         """).fetchall()
-        conn.close()
     except sqlite3.Error:
         return store["model_performance"]
+    finally:
+        if conn is not None:
+            conn.close()
 
     perf: ModelPerformance = {}
     for row in rows:
@@ -440,6 +443,7 @@ def _extract_quality_per_token(
     if not p.exists():
         return store["quality_per_token"]
 
+    conn = None
     try:
         conn = sqlite3.connect(str(p), check_same_thread=False)
         conn.row_factory = sqlite3.Row
@@ -454,9 +458,11 @@ def _extract_quality_per_token(
             WHERE accepted IS NOT NULL
               AND (context_tokens + response_tokens) > 0
         """).fetchall()
-        conn.close()
     except sqlite3.Error:
         return store["quality_per_token"]
+    finally:
+        if conn is not None:
+            conn.close()
 
     # Aggregate per (model, compression_mode, task_type)
     agg: QualityPerTokenMap = {}

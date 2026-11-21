@@ -92,62 +92,66 @@ class Monitor(_BaseMonitor):
     def _init_db(self) -> None:
         super()._init_db()
         conn = sqlite3.connect(str(self.db_path))
-        # session_id column on requests
         try:
-            conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
-        except sqlite3.OperationalError:
-            pass
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
-        # stable_hash and volatile_hash columns for safe-mode fingerprinting
-        try:
-            conn.execute("ALTER TABLE requests ADD COLUMN stable_hash TEXT")
-        except sqlite3.OperationalError:
-            pass
-        try:
-            conn.execute("ALTER TABLE requests ADD COLUMN volatile_hash TEXT")
-        except sqlite3.OperationalError:
-            pass
-        conn.commit()
-        # mutation_audit table
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS mutation_audit (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_id INTEGER,
-                session_id TEXT,
-                timestamp TEXT NOT NULL,
-                pre_hash TEXT,
-                post_hash TEXT,
-                rules_applied TEXT,
-                cache_risk TEXT,
-                rollback_possible INTEGER,
-                mode TEXT
+            # session_id column on requests
+            try:
+                conn.execute("ALTER TABLE requests ADD COLUMN session_id TEXT")
+            except sqlite3.OperationalError:
+                pass
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_requests_session ON requests(session_id)")
+            # stable_hash and volatile_hash columns for safe-mode fingerprinting
+            try:
+                conn.execute("ALTER TABLE requests ADD COLUMN stable_hash TEXT")
+            except sqlite3.OperationalError:
+                pass
+            try:
+                conn.execute("ALTER TABLE requests ADD COLUMN volatile_hash TEXT")
+            except sqlite3.OperationalError:
+                pass
+            conn.commit()
+            # mutation_audit table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS mutation_audit (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id INTEGER,
+                    session_id TEXT,
+                    timestamp TEXT NOT NULL,
+                    pre_hash TEXT,
+                    post_hash TEXT,
+                    rules_applied TEXT,
+                    cache_risk TEXT,
+                    rollback_possible INTEGER,
+                    mode TEXT
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_mutation_audit_session ON mutation_audit(session_id)"
             )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mutation_audit_session ON mutation_audit(session_id)"
-        )
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts ON mutation_audit(timestamp)"
-        )
-        conn.commit()
-        # cache_invalidator_events table (log-only, Phase 2)
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS cache_invalidator_events (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                request_id INTEGER,
-                session_id TEXT,
-                timestamp TEXT NOT NULL,
-                event_type TEXT,
-                before_value TEXT,
-                after_value TEXT
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_mutation_audit_ts ON mutation_audit(timestamp)"
             )
-        """)
-        conn.execute(
-            "CREATE INDEX IF NOT EXISTS idx_cie_session ON cache_invalidator_events(session_id)"
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_cie_ts ON cache_invalidator_events(timestamp)")
-        conn.commit()
-        conn.close()
+            conn.commit()
+            # cache_invalidator_events table (log-only, Phase 2)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS cache_invalidator_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    request_id INTEGER,
+                    session_id TEXT,
+                    timestamp TEXT NOT NULL,
+                    event_type TEXT,
+                    before_value TEXT,
+                    after_value TEXT
+                )
+            """)
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cie_session ON cache_invalidator_events(session_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_cie_ts ON cache_invalidator_events(timestamp)"
+            )
+            conn.commit()
+        finally:
+            conn.close()
 
     # This compatibility shim intentionally preserves the legacy positional ABI.
     def log(  # type: ignore[override]  # compatibility shim intentionally loosens the legacy positional ABI's parameter types to object, narrower than the base signature it overrides
@@ -183,6 +187,7 @@ class Monitor(_BaseMonitor):
         """Log a request; extends parent with session_id and fingerprints."""
         from datetime import datetime
 
+        _conn = None
         try:
             _conn = sqlite3.connect(str(self.db_path))
             _conn.execute(
@@ -217,9 +222,11 @@ class Monitor(_BaseMonitor):
                 ),
             )
             _conn.commit()
-            _conn.close()
         except Exception:
             pass
+        finally:
+            if _conn is not None:
+                _conn.close()
 
 
 # ---------------------------------------------------------------------------
@@ -251,6 +258,7 @@ def _write_mutation_audit(
     pre_hash = hashlib.sha256(body_pre).hexdigest()
     post_hash = hashlib.sha256(body_post).hexdigest()
     rollback_possible = 1
+    _conn = None
     try:
         _conn = sqlite3.connect(str(db_path))
         _conn.execute(
@@ -270,9 +278,11 @@ def _write_mutation_audit(
             ),
         )
         _conn.commit()
-        _conn.close()
     except Exception:
         pass  # fail-open: never break a request over audit write
+    finally:
+        if _conn is not None:
+            _conn.close()
 
 
 # ---------------------------------------------------------------------------

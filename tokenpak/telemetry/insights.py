@@ -142,6 +142,7 @@ class InsightEngine:
             return self._cache
 
         insights: List[Insight] = []
+        conn = None
         try:
             conn = sqlite3.connect(self.db_path)
             conn.row_factory = sqlite3.Row
@@ -151,7 +152,6 @@ class InsightEngine:
 
             # Only generate insights if there's enough data
             if current["total_requests"] < self.thresholds["min_requests"]:
-                conn.close()
                 return []
 
             insights.extend(self._savings_insights(current, previous))
@@ -160,9 +160,11 @@ class InsightEngine:
             insights.extend(self._error_insights(conn, current, days))
             insights.extend(self._decision_support(current, previous))
 
-            conn.close()
         except sqlite3.Error:
             return []
+        finally:
+            if conn is not None:
+                conn.close()
 
         # Sort: alert → warning → success → info, then by delta magnitude desc
         insights.sort(key=lambda i: (i.severity_rank, -i.delta_magnitude))

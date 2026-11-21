@@ -343,10 +343,24 @@ def _row_duration_ms(row: sqlite3.Row) -> float | None:
 
 
 def _connect_ro(path: str) -> sqlite3.Connection:
-    """Read-only open: an absent file errors instead of being created."""
+    """Read-only use: an absent file errors instead of being created.
+
+    Opened ``mode=rw`` with ``query_only`` rather than ``mode=ro``: while the
+    proxy's ledger writer holds ``monitor.db`` open, SQLite keeps a closed
+    connection's descriptor for reuse by the next connection opened in the
+    same mode, so a single read-only reader would pin one more descriptor for
+    the life of the process. ``mode=rw`` still never creates the file, and
+    the operating system's write protection still applies.
+    """
     from urllib.parse import quote
 
-    return sqlite3.connect(f"file:{quote(path)}?mode=ro", uri=True, timeout=5.0)
+    conn = sqlite3.connect(f"file:{quote(path)}?mode=rw", uri=True, timeout=5.0)
+    try:
+        conn.execute("PRAGMA query_only = ON")
+    except BaseException:
+        conn.close()
+        raise
+    return conn
 
 
 def _parse_time_corpus(

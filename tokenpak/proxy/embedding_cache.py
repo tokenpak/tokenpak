@@ -69,8 +69,7 @@ class EmbeddingCache:
         self.ttl_days = ttl_days
         self.max_mb = max_mb
         # Ensure schema exists on first construction.
-        con = _connect(db_path)
-        con.close()
+        _connect(db_path).close()
 
     # ------------------------------------------------------------------
     # Public API

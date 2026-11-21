@@ -31,9 +31,11 @@ import json
 import sqlite3
 import threading
 import time
+import weakref
 from pathlib import Path
 from typing import Any, Optional, Union, cast
 
+from tokenpak._sqlite_lifecycle import ThreadConnection as _ThreadConnection
 from tokenpak.telemetry.models import Cost, Segment, TelemetryEvent, Usage
 
 # Schema setup is rare and process-global serialization avoids first-opener
@@ -339,6 +341,19 @@ class TelemetryDB:
         if conn is None:
             conn = self._connect()
             self._local.conn = conn
+            # Close this thread's connection, and drop it from _all_conns,
+            # as soon as the thread exits: short-lived threads must not
+            # accumulate open connections until close() or a full GC.
+            store = weakref.ref(self)
+
+            def forget(closed: sqlite3.Connection) -> None:
+                owner = store()
+                if owner is not None:
+                    with owner._conns_lock:
+                        if closed in owner._all_conns:
+                            owner._all_conns.remove(closed)
+
+            self._local.closer = _ThreadConnection(conn, forget)
         return conn
 
     def _apply_ddl(self) -> None:

@@ -172,15 +172,18 @@ class TriggerDaemon:
         db_path = get_db_path("telemetry.db")
         if not db_path.exists():
             return
+        conn = None
         try:
             conn = sqlite3.connect(str(db_path))
             cur = conn.execute(
                 "SELECT COALESCE(SUM(cost_saved),0) FROM tp_requests WHERE date(timestamp)=date('now')"
             )
             daily_cost = float(cur.fetchone()[0] or 0)
-            conn.close()
         except Exception:
             return
+        finally:
+            if conn is not None:
+                conn.close()
 
         event_str = f"cost:daily>{daily_cost:.2f}"
         for trigger in triggers:

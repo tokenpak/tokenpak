@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generated_at": "2026-10-09T04:53:21Z",
+  "generated_at": "2026-10-18T13:07:13Z",
   "package_version": "1.31.0",
   "symbols": [
     {
@@ -9112,6 +9112,10 @@
       "name": "CacheInvalidatorEvent"
     },
     {
+      "module": "tokenpak.proxy.cache_invalidator",
+      "name": "DEFAULT_CACHE_MAX_BYTES"
+    },
+    {
       "module": "tokenpak.proxy.cache_pipeline",
       "name": "CacheMode"
     },
@@ -9694,6 +9698,30 @@
     {
       "module": "tokenpak.proxy.degradation",
       "name": "get_degradation_tracker"
+    },
+    {
+      "module": "tokenpak.proxy.economics_gate",
+      "name": "DEFAULT_MAX_CONCURRENT"
+    },
+    {
+      "module": "tokenpak.proxy.economics_gate",
+      "name": "DEFAULT_WAIT_S"
+    },
+    {
+      "module": "tokenpak.proxy.economics_gate",
+      "name": "EconomicsBusy"
+    },
+    {
+      "module": "tokenpak.proxy.economics_gate",
+      "name": "EconomicsGate"
+    },
+    {
+      "module": "tokenpak.proxy.economics_gate",
+      "name": "client_disconnected"
+    },
+    {
+      "module": "tokenpak.proxy.economics_gate",
+      "name": "get_economics_gate"
     },
     {
       "module": "tokenpak.proxy.embedding_cache",

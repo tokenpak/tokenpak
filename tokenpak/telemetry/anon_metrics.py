@@ -20,6 +20,7 @@ from __future__ import annotations
 import os
 import sqlite3
 import uuid
+from contextlib import closing
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
@@ -157,7 +158,7 @@ class MetricsStore:
         return conn
 
     def _ensure_schema(self) -> None:
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS metrics (
                     local_id        TEXT PRIMARY KEY,
@@ -189,7 +190,7 @@ class MetricsStore:
 
     def record(self, rec: MetricsRecord) -> None:
         """Insert a new metrics record."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 """
                 INSERT OR IGNORE INTO metrics
@@ -216,7 +217,7 @@ class MetricsStore:
 
     def get_pending(self, limit: int = 500) -> List[MetricsRecord]:
         """Return unsynced records."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute(
                 "SELECT * FROM metrics WHERE synced=0 ORDER BY date_utc LIMIT ?", (limit,)
             ).fetchall()
@@ -227,7 +228,7 @@ class MetricsStore:
         if not local_ids:
             return
         placeholders = ",".join("?" * len(local_ids))
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute(
                 f"UPDATE metrics SET synced=1 WHERE local_id IN ({placeholders})",
                 local_ids,
@@ -236,7 +237,7 @@ class MetricsStore:
 
     def history(self, days: int = 30, limit: int = 500) -> List[MetricsRecord]:
         """Return all records (synced + pending) for the last N days."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute(
                 """
                 SELECT * FROM metrics
@@ -250,7 +251,7 @@ class MetricsStore:
 
     def daily_summary(self, days: int = 30) -> List[dict]:
         """Aggregate stats per day for CLI display."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             rows = conn.execute(
                 """
                 SELECT

@@ -137,6 +137,7 @@ def _add_notification(notif_type: str, title: str, message: str) -> Notification
 
 def _detect_cost_spike(storage: object) -> list[Notification]:
     """Check if today's cost is >2x the average of the past 7 days."""
+    conn = None
     try:
         db_path = storage._db_path if hasattr(storage, "_db_path") else str(storage)
         conn = sqlite3.connect(db_path)
@@ -167,8 +168,6 @@ def _detect_cost_spike(storage: object) -> list[Notification]:
         if last_week_avg is None:
             last_week_avg = 0.0
 
-        conn.close()
-
         if last_week_avg > 0 and today_cost > 2 * last_week_avg:
             n = _add_notification(
                 "alert",
@@ -180,10 +179,14 @@ def _detect_cost_spike(storage: object) -> list[Notification]:
     except Exception as e:
         logger.warning(f"Cost spike detection failed: {e}")
         return []
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _check_cache_miss_rate(storage: object) -> list[Notification]:
     """Check if cache miss rate is >80% in recent requests."""
+    conn = None
     try:
         db_path = storage._db_path if hasattr(storage, "_db_path") else str(storage)
         conn = sqlite3.connect(db_path)
@@ -198,8 +201,6 @@ def _check_cache_miss_rate(storage: object) -> list[Notification]:
         total = row[0] if row else 0
         misses = row[1] if row else 0
 
-        conn.close()
-
         if total > 0:
             miss_rate = misses / total
             if miss_rate > 0.8:
@@ -211,10 +212,14 @@ def _check_cache_miss_rate(storage: object) -> list[Notification]:
     except Exception as e:
         logger.warning(f"Cache miss detection failed: {e}")
         return []
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _check_recent_errors(storage: object) -> list[Notification]:
     """Check if there are any errors (status_code >= 400) in recent requests."""
+    conn = None
     try:
         db_path = storage._db_path if hasattr(storage, "_db_path") else str(storage)
         conn = sqlite3.connect(db_path)
@@ -228,8 +233,6 @@ def _check_recent_errors(storage: object) -> list[Notification]:
         row = cursor.fetchone()
         error_count = row[0] if row else 0
 
-        conn.close()
-
         if error_count > 0:
             n = _add_notification("alert", "Recent Errors", f"{error_count} request(s) failed")
             return [n]
@@ -237,6 +240,9 @@ def _check_recent_errors(storage: object) -> list[Notification]:
     except Exception as e:
         logger.warning(f"Error detection failed: {e}")
         return []
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _safe_list_traces(

@@ -32,6 +32,7 @@ import sys
 import threading
 import time
 import uuid
+from contextlib import closing
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -96,7 +97,7 @@ def _get_requests_24h() -> int:
         if not db_path.exists():
             return 0
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()
-        with sqlite3.connect(str(db_path)) as conn:
+        with closing(sqlite3.connect(str(db_path))) as conn, conn:
             row = conn.execute("SELECT COUNT(*) FROM tp_events WHERE ts >= ?", (cutoff,)).fetchone()
             return int(row[0]) if row else 0
     except Exception:
@@ -114,7 +115,7 @@ def _get_models_24h() -> list[str]:
         if not db_path.exists():
             return []
         cutoff = (datetime.now(timezone.utc) - timedelta(hours=24)).timestamp()
-        with sqlite3.connect(str(db_path)) as conn:
+        with closing(sqlite3.connect(str(db_path))) as conn, conn:
             rows = conn.execute(
                 "SELECT DISTINCT model FROM tp_events WHERE ts >= ? AND model != ''",
                 (cutoff,),

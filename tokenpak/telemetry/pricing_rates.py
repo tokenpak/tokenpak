@@ -285,6 +285,7 @@ def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict[
 
     # Velocity: compute last_hour, last_24h, all_time regardless of period filter
     def _saved_for_window(window_clause: str) -> float:
+        conn2 = None
         try:
             conn2 = sqlite3.connect(db_path)
             conn2.row_factory = sqlite3.Row
@@ -300,9 +301,11 @@ def calculate_fleet_savings(db_path: str, period: Optional[str] = None) -> dict[
                 GROUP BY model
                 """
             ).fetchall()
-            conn2.close()
         except Exception:
             return 0.0
+        finally:
+            if conn2 is not None:
+                conn2.close()
         total = 0.0
         for r in wrows:
             rt = get_rates(r["model"])

@@ -56,6 +56,7 @@ from __future__ import annotations
 import logging
 import math
 import os
+import ssl
 import threading
 import time
 from collections import deque
@@ -297,6 +298,8 @@ class ConnectionPool:
         # alone is not a sufficient terminal signal.
         self._cleanup_handoff_complete = False
         self._closed = False
+        # One verified TLS context shared by every client this pool builds.
+        self._ssl_context: Optional[ssl.SSLContext] = None
         # Every constructed client owns one hard slot until close succeeds.
         # This bounds live + pooled + retired + cleanup-owned clients/FDs even
         # if all cleanup workers wedge. The close queue therefore always has
@@ -328,12 +331,16 @@ class ConnectionPool:
             pool=cfg.connect_timeout,
         )
 
+        if self._ssl_context is None:
+            # Building a context per client reloads the CA bundle (hundreds of
+            # milliseconds of CPU) for every new session client.
+            self._ssl_context = httpx.create_ssl_context()
         return httpx.Client(
             http2=use_http2,
             limits=limits,
             timeout=timeout,
             follow_redirects=False,
-            verify=True,  # enforce TLS certificate validation
+            verify=self._ssl_context,  # enforce TLS certificate validation
         )
 
     def _new_client(self) -> httpx.Client:

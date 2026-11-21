@@ -75,6 +75,7 @@ if FASTAPI_AVAILABLE:
         sz, ev, co = 0.0, 0, 0
         if exists:
             sz = db.stat().st_size / 1024 / 1024
+            c = None
             try:
                 c = sqlite3.connect(str(db))
                 cur = c.cursor()
@@ -82,7 +83,6 @@ if FASTAPI_AVAILABLE:
                 ev = cur.fetchone()[0]
                 cur.execute("SELECT COUNT(*) FROM tp_costs")
                 co = cur.fetchone()[0]
-                c.close()
             except Exception as e:
                 return {
                     "status": "error",
@@ -93,6 +93,9 @@ if FASTAPI_AVAILABLE:
                     "event_count": 0,
                     "cost_count": 0,
                 }
+            finally:
+                if c is not None:
+                    c.close()
         return {
             "status": "ok" if exists else "no_db",
             "db_path": str(db),

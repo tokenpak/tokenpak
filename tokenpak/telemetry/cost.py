@@ -1451,26 +1451,28 @@ class CostEngine:
     def list_pricing(self, version: Optional[str] = None) -> List[dict[str, object]]:
         """List all pricing entries, optionally filtered by version."""
         conn = self._connect()
-        if version:
-            rows = conn.execute(
-                """SELECT * FROM tp_pricing
-                   WHERE version = ?
-                   ORDER BY provider, model, id DESC""",
-                (version,),
-            ).fetchall()
-        else:
-            rows = conn.execute(
-                """SELECT * FROM tp_pricing
-                   ORDER BY version DESC, provider, model, id DESC"""
-            ).fetchall()
-        conn.close()
-        result: list[dict[str, object]] = []
-        for row in rows:
-            values = {str(column): value for column, value in dict(row).items()}
-            values["provenance"] = values.get("provenance") or UNKNOWN_METADATA
-            values["unit_basis"] = values.get("unit_basis") or UNKNOWN_METADATA
-            result.append(values)
-        return result
+        try:
+            if version:
+                rows = conn.execute(
+                    """SELECT * FROM tp_pricing
+                       WHERE version = ?
+                       ORDER BY provider, model, id DESC""",
+                    (version,),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    """SELECT * FROM tp_pricing
+                       ORDER BY version DESC, provider, model, id DESC"""
+                ).fetchall()
+            result: list[dict[str, object]] = []
+            for row in rows:
+                values = {str(column): value for column, value in dict(row).items()}
+                values["provenance"] = values.get("provenance") or UNKNOWN_METADATA
+                values["unit_basis"] = values.get("unit_basis") or UNKNOWN_METADATA
+                result.append(values)
+            return result
+        finally:
+            conn.close()
 
     def add_pricing(
         self,

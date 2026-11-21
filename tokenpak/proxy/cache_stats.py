@@ -45,6 +45,7 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
         rule — a client-placed or unknown-origin cache read is real cache
         behavior but is not TokenPak's doing.
     """
+    conn = None
     try:
         if not db_path:
             raise ValueError("db_path not configured")
@@ -80,7 +81,6 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             (cutoff,),
         )
         overall = cur.fetchone()
-        conn.close()
 
         total_requests = overall[0] or 0
         cache_hits = overall[1] or 0
@@ -117,6 +117,9 @@ def _get_cache_stats_by_window(hours: int = 24, db_path: Optional[str] = None) -
             "per_provider": {},
             "error": str(e),
         }
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _build_cache_stats_payload(

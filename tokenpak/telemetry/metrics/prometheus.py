@@ -106,6 +106,7 @@ class PrometheusRegistry:
         """Return [(model, status_ok_or_error, count), ...] from DB."""
         if self._monitor is None:
             return []
+        conn = None
         try:
             db_path = self._monitor.db_path
             conn = sqlite3.connect(db_path)
@@ -116,25 +117,30 @@ class PrometheusRegistry:
                 FROM requests
                 GROUP BY model, status
             """).fetchall()
-            conn.close()
             return [(r[0] or "unknown", r[1], r[2]) for r in rows]
         except Exception:
             return []
+        finally:
+            if conn is not None:
+                conn.close()
 
     def _query_latency_histogram(self) -> tuple[list[tuple[float, int]], int, float]:
         """Return (bucket_counts, total_count, total_seconds) from DB."""
         buckets_ms = [b * 1000 for b in self.DURATION_BUCKETS_S if not math.isinf(b)]
         if self._monitor is None:
             return [(b, 0) for b in self.DURATION_BUCKETS_S], 0, 0.0
+        conn = None
         try:
             db_path = self._monitor.db_path
             conn = sqlite3.connect(db_path)
             rows = conn.execute(
                 "SELECT latency_ms FROM requests WHERE latency_ms IS NOT NULL"
             ).fetchall()
-            conn.close()
         except Exception:
             return [(b, 0) for b in self.DURATION_BUCKETS_S], 0, 0.0
+        finally:
+            if conn is not None:
+                conn.close()
 
         latencies_s = [r[0] / 1000.0 for r in rows if r[0] is not None]
         if not latencies_s:
@@ -151,6 +157,7 @@ class PrometheusRegistry:
         """Return [(model, input_tokens, output_tokens, saved_tokens), ...]."""
         if self._monitor is None:
             return []
+        conn = None
         try:
             db_path = self._monitor.db_path
             conn = sqlite3.connect(db_path)
@@ -162,10 +169,12 @@ class PrometheusRegistry:
                 FROM requests
                 GROUP BY model
             """).fetchall()
-            conn.close()
             return [(r[0] or "unknown", r[1], r[2], max(0, r[3])) for r in rows]
         except Exception:
             return []
+        finally:
+            if conn is not None:
+                conn.close()
 
     # ------------------------------------------------------------------
     # Renderer

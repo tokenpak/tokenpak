@@ -933,6 +933,7 @@ def create_app(
         loop = asyncio.get_event_loop()
 
         def _query() -> tuple[list[str], list[str], list[str]]:
+            conn = None
             try:
                 import sqlite3 as _sqlite3
 
@@ -948,10 +949,12 @@ def create_app(
                     "SELECT DISTINCT agent_id FROM tp_events WHERE agent_id != '' ORDER BY agent_id"
                 )
                 agents = [str(r[0]) for r in cur.fetchall()]
-                conn.close()
                 return providers, models, agents
             except Exception:
                 return [], [], []
+            finally:
+                if conn is not None:
+                    conn.close()
 
         providers, models, agents = await loop.run_in_executor(_executor, _query)
 

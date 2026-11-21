@@ -8,6 +8,7 @@ Enables usage-based pricing for the Pro tier.
 import logging
 import sqlite3
 import threading
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
@@ -90,7 +91,7 @@ class UsageMeter:
 
     def _init_schema(self):
         """Create SQLite schema if not exists."""
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS usage (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -144,7 +145,7 @@ class UsageMeter:
 
         def _insert():
             with self._lock:
-                with self._connect() as conn:
+                with closing(self._connect()) as conn, conn:
                     conn.execute(
                         """
                         INSERT INTO usage
@@ -232,7 +233,7 @@ class UsageMeter:
                 }
             }
         """
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             conn.row_factory = sqlite3.Row
 
             # Get all records for the day
@@ -339,7 +340,7 @@ class UsageMeter:
             False if network error or server error
         """
         # Get all unreported rows, grouped by date
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.execute(
                 """
                 SELECT DISTINCT DATE(timestamp) as date FROM usage
@@ -377,7 +378,7 @@ class UsageMeter:
             response.raise_for_status()
 
             # Mark as reported
-            with self._connect() as conn:
+            with closing(self._connect()) as conn, conn:
                 conn.execute(
                     """
                     UPDATE usage SET reported = 1
@@ -403,7 +404,7 @@ class UsageMeter:
 
         Returns: Number of rows deleted
         """
-        with self._connect() as conn:
+        with closing(self._connect()) as conn, conn:
             cursor = conn.execute(
                 """
                 DELETE FROM usage

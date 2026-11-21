@@ -577,12 +577,16 @@ def _record_handoff(session_id: str, content: str) -> dict[str, Any]:
 
 def _handle_budget_get(handler: Any, qs: dict[str, list[str]]) -> None:
     """Return current session + daily cost snapshot."""
+    tracker = None
     try:
         tracker = _get_budget_tracker()
         est = tracker.estimate(input_tokens=0)
     except Exception as exc:
         _send_error(handler, 500, "budget_unavailable", str(exc))
         return
+    finally:
+        if tracker is not None:
+            tracker.close()
     daily_budget = float(getattr(est, "daily_budget_usd", 0.0) or 0.0)
     remaining = getattr(est, "budget_remaining_usd", 0.0)
     # Sanitize inf/nan to None so strict JSON accepts them
@@ -615,12 +619,16 @@ def _handle_journal_sessions(handler: Any, qs: dict[str, list[str]]) -> None:
     except (TypeError, ValueError):
         limit = 10
     limit = max(1, min(100, limit))
+    store = None
     try:
         store = _get_journal_store()
         sessions = store.recent_sessions(limit=limit)
     except Exception as exc:
         _send_error(handler, 500, "journal_unavailable", str(exc))
         return
+    finally:
+        if store is not None:
+            store.close()
     out = []
     for s in sessions:
         out.append(
@@ -645,12 +653,16 @@ def _handle_journal_get(handler: Any, session_id: str, qs: dict[str, list[str]])
     except (TypeError, ValueError):
         limit = 20
     limit = max(1, min(500, limit))
+    store = None
     try:
         store = _get_journal_store()
         entries = store.get_entries(session_id, entry_type=entry_type, limit=limit)
     except Exception as exc:
         _send_error(handler, 500, "journal_unavailable", str(exc))
         return
+    finally:
+        if store is not None:
+            store.close()
     _send_json(
         handler,
         200,
@@ -682,6 +694,7 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
     if not isinstance(metadata, dict):
         _send_error(handler, 400, "invalid_metadata", "metadata must be an object")
         return
+    store = None
     try:
         store = _get_journal_store()
         # Register the session row on first write so the sessions table is
@@ -702,6 +715,9 @@ def _handle_journal_post(handler: Any, session_id: str, body: dict[str, Any]) ->
     except Exception as exc:
         _send_error(handler, 500, "journal_write_failed", str(exc))
         return
+    finally:
+        if store is not None:
+            store.close()
     # Mirror handoff facts to the authoritative shared namespace + a readable
     # current-session capsule so a different client can retrieve the latest
     # handoff without knowing the writer's per-tool session id.
@@ -763,6 +779,7 @@ def _handle_compress(handler: Any, body: dict[str, Any]) -> None:
     # Record savings on the proxy side so `tokenpak status` attributes
     # prompt-side value, matching the companion's prior behavior.
     if tokens_avoided > 0 and session_id:
+        store = None
         try:
             store = _get_journal_store()
             store.record_savings(
@@ -774,6 +791,9 @@ def _handle_compress(handler: Any, body: dict[str, Any]) -> None:
             )
         except Exception:
             pass  # never fail the tool call
+        finally:
+            if store is not None:
+                store.close()
 
     reduction_pct = round((1 - pruned_tokens_est / original_tokens_est) * 100, 1)
     _send_json(
@@ -885,6 +905,7 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
     # old in-process behavior where the companion wrote this to journal).
     caller_sid = qs.get("caller_session_id", [""])[0] or handler.headers.get("X-TP-Session", "")
     if caller_sid:
+        store = None
         try:
             store = _get_journal_store()
             store.record_savings(
@@ -896,6 +917,9 @@ def _handle_capsule_get(handler: Any, session_id: str, qs: dict[str, list[str]])
             )
         except Exception:
             pass
+        finally:
+            if store is not None:
+                store.close()
 
     _send_json(
         handler,

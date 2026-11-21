@@ -203,6 +203,7 @@ def _write_cache_invalidations(
     """Insert one row per alert into cache_invalidations. Fail-open."""
     if not alerts:
         return
+    conn = None
     try:
         conn = sqlite3.connect(str(db_path))
         for a in alerts:
@@ -219,9 +220,11 @@ def _write_cache_invalidations(
                 ),
             )
         conn.commit()
-        conn.close()
     except Exception as exc:
         logger.debug("cache_invalidations write failed: %s", exc)
+    finally:
+        if conn is not None:
+            conn.close()
 
 
 def _fire_alerts(

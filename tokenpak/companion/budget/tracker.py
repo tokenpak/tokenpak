@@ -77,6 +77,13 @@ class BudgetTracker:
             self._write_conn = self._connect()
         return self._write_conn
 
+    def close(self) -> None:
+        """Close the cached write connection; a later write reopens it."""
+        with self._write_lock:
+            conn, self._write_conn = self._write_conn, None
+        if conn is not None:
+            conn.close()
+
     def estimate(
         self,
         input_tokens: int,

@@ -24,6 +24,7 @@ Example usage:
 
 import hashlib
 import sqlite3
+from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
@@ -72,7 +73,7 @@ class DecisionMemoryDB:
 
     def _init_schema(self) -> None:
         """Initialize the database schema if it doesn't exist."""
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
 
             # decisions table
@@ -130,7 +131,7 @@ class DecisionMemoryDB:
 
         timestamp = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -164,7 +165,7 @@ class DecisionMemoryDB:
         if query_hash is None:
             raise ValueError("Either query or query_hash must be provided")
 
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -212,7 +213,7 @@ class DecisionMemoryDB:
         # Validate confidence
         new_confidence = max(0.0, min(1.0, float(new_confidence)))
 
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute(
                 """
@@ -241,7 +242,7 @@ class DecisionMemoryDB:
         Returns:
             True if updated, False if record not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
 
             # Get current record to adjust confidence
@@ -287,7 +288,7 @@ class DecisionMemoryDB:
         Returns:
             DecisionRecord or None if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -325,7 +326,7 @@ class DecisionMemoryDB:
         Returns:
             List of all DecisionRecords
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
 
@@ -356,7 +357,7 @@ class DecisionMemoryDB:
 
     def count(self) -> int:
         """Return total number of decisions."""
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("SELECT COUNT(*) FROM decisions")
             row = cursor.fetchone()
@@ -372,7 +373,7 @@ class DecisionMemoryDB:
         Returns:
             True if deleted, False if not found
         """
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM decisions WHERE id = ?", (record_id,))
             conn.commit()
@@ -380,7 +381,7 @@ class DecisionMemoryDB:
 
     def clear(self) -> None:
         """Clear all decisions from the database."""
-        with sqlite3.connect(self.db_path) as conn:
+        with closing(sqlite3.connect(self.db_path)) as conn, conn:
             cursor = conn.cursor()
             cursor.execute("DELETE FROM decisions")
             conn.commit()

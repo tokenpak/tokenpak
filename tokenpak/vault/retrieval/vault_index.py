@@ -237,10 +237,10 @@ class VaultIndex:
             TOKENPAK_USE_SQLITE_BLOCKS=1  and  <tokenpak_dir>/blocks.db exists.
         """
         import sqlite3 as _sqlite3
+        from contextlib import closing
 
-        conn = _sqlite3.connect(db_path)
-        rows = conn.execute("SELECT id, content FROM blocks").fetchall()
-        conn.close()
+        with closing(_sqlite3.connect(db_path)) as conn:
+            rows = conn.execute("SELECT id, content FROM blocks").fetchall()
 
         new_blocks: Dict[str, VaultBlock] = {}
         df: Dict[str, int] = {}

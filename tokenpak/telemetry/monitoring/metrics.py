@@ -143,6 +143,7 @@ class ProxyMetricsCollector:
         Returns empty list if DB is unavailable or has no data.
         Each row has: provider, model, requests, tokens_saved, cost_total.
         """
+        conn = None
         try:
             if not self._db_path.exists():
                 return []
@@ -164,11 +165,13 @@ class ProxyMetricsCollector:
                 GROUP BY e.provider, e.model
             """)
             rows = [dict(r) for r in cur.fetchall()]
-            conn.close()
             return rows
         except Exception as exc:
             logger.debug("TelemetryDB query skipped: %s", exc)
             return []
+        finally:
+            if conn is not None:
+                conn.close()
 
     def _get_session(self) -> Dict[str, Any]:
         """Return proxy session dict (or empty defaults)."""

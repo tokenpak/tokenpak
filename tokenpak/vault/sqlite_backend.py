@@ -146,12 +146,16 @@ class SQLiteRetrievalBackend:
             return []
 
         with self._lock:
+            conn = None
             try:
                 conn = self._connect()
                 return self._bm25_search(conn, query_terms, top_k, min_score)
             except sqlite3.Error as e:
                 print(f"  ⚠️ SQLite retrieval search error: {e}")
                 return []
+            finally:
+                if conn is not None:
+                    conn.close()
 
     def compile_injection(
         self,
@@ -265,14 +269,17 @@ class SQLiteRetrievalBackend:
         """Return the mtime of the last successful build, or 0.0."""
         if not self.db_path.exists():
             return 0.0
+        conn = None
         try:
             conn = self._connect()
             self._ensure_schema(conn)
             row = conn.execute("SELECT value FROM meta WHERE key='index_mtime'").fetchone()
-            conn.close()
             return float(row[0]) if row else 0.0
         except sqlite3.Error:
             return 0.0
+        finally:
+            if conn is not None:
+                conn.close()
 
     def _set_checkpoint(self, conn: sqlite3.Connection, mtime: float) -> None:
         conn.execute(
@@ -518,6 +525,7 @@ class SQLiteRetrievalBackend:
         """
         if not self.db_path.exists():
             return {}
+        conn = None
         try:
             conn = self._connect()
             conn.row_factory = sqlite3.Row
@@ -525,7 +533,6 @@ class SQLiteRetrievalBackend:
                 "SELECT block_id, source_path, risk_class, must_keep, raw_tokens, content "
                 "FROM blocks"
             ).fetchall()
-            conn.close()
             return {
                 str(r["block_id"]): {
                     "block_id": str(r["block_id"]),
@@ -539,3 +546,6 @@ class SQLiteRetrievalBackend:
             }
         except sqlite3.Error:
             return {}
+        finally:
+            if conn is not None:
+                conn.close()
