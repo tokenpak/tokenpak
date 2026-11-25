@@ -60,7 +60,6 @@ _SQLITE_MAGIC = b"SQLite format 3\x00"
 _SQLITE_SUFFIXES = (".db", ".sqlite", ".sqlite3")
 _BATCH = 5000
 _LICENSE = "license.json"
-_CONFIG = "config.yaml"
 _LEGACY_SUFFIX = ".legacy"
 
 #: ``outcome`` in the JSON report. Only ``complete`` is a finished migration.
@@ -510,10 +509,21 @@ def _copy_file(src: Path, dest: Path, ctx: _Ctx, *, force_private: bool = False)
     os.replace(tmp, dest)
 
 
+_BROKEN_LINK = "canonical entry is a broken symbolic link"
+
+
 def _process_file(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
+    from tokenpak import _paths
+
     name = src.name
     if name.endswith(".log"):
         return Item(rel, SKIP_LOG, "logs are not carried over")
+    if dest.is_symlink() and not dest.exists():
+        # A broken link is still the user's entry. Writing to its path would
+        # replace it with a regular file and detach whatever it is meant to name.
+        if _is_sqlite(src):
+            return Item(rel, CONFLICT, f"{_BROKEN_LINK}; nothing copied")
+        return _keep_beside(src, dest, rel, ctx, kept=f"{_BROKEN_LINK}, kept as it is")
     if _is_sqlite(src):
         return _process_sqlite(src, dest, rel, ctx)
     is_license = rel == _LICENSE
@@ -528,12 +538,22 @@ def _process_file(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
         return Item(rel, SKIP_CANONICAL, "canonical license kept")
     if name.endswith(".jsonl"):
         return _merge_lines(src, dest, rel, ctx)
-    if rel == _CONFIG:
+    if rel == _paths.CONFIG_CANONICAL:
         merged = _merge_config(src, dest, rel, ctx)
         if merged is not None:
             return merged
+    return _keep_beside(src, dest, rel, ctx)
+
+
+def _keep_beside(
+    src: Path, dest: Path, rel: str, ctx: _Ctx, *, kept: str = "canonical kept"
+) -> Item:
+    """Leave the canonical entry exactly as it is and save the legacy file beside it.
+
+    The item stays unresolved: the user decides what, if anything, to carry over.
+    """
     side = dest.with_name(dest.name + _LEGACY_SUFFIX)
-    detail = f"canonical kept; legacy copy beside it as {side.name}"
+    detail = f"{kept}; legacy copy beside it as {side.name}"
     if side.exists() and filecmp.cmp(src, side, shallow=False):
         return Item(rel, CONFLICT, detail, side=side.name)
     if ctx.apply:
@@ -567,21 +587,60 @@ def _merge_lines(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
 # --------------------------------------------------------------------------
 
 
-def _load_mapping(path: Path) -> Optional[dict[str, Any]]:
-    """Parse a YAML mapping, or ``None`` when it is unreadable or not a mapping."""
+def _parse_mapping(text: str) -> Optional[dict[Any, Any]]:
+    """The settings in one YAML document, or ``None`` when *text* is not exactly that.
+
+    An empty, comment-only or null document holds no settings. Anything else
+    that is not a single mapping (a list, a scalar, several documents, invalid
+    YAML) is ``None``.
+    """
     try:
         import yaml
     except ImportError:
         return None
     try:
-        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    except (OSError, ValueError, yaml.YAMLError):
+        data = yaml.safe_load(text)
+    except (ValueError, yaml.YAMLError):
         return None
+    if data is None:
+        return {}
     return data if isinstance(data, dict) else None
 
 
+def _load_mapping(path: Path) -> Optional[dict[Any, Any]]:
+    """:func:`_parse_mapping` of a file, or ``None`` when it cannot be read."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    return _parse_mapping(text)
+
+
+def _same(a: Any, b: Any, seen: Optional[set[tuple[int, int]]] = None) -> bool:
+    """Equal values of the same types: ``1`` is not ``True`` or ``1.0`` here.
+
+    A setting is carried over only when its own value arrives, not one that
+    merely compares equal. Mappings and lists YAML anchors share are compared
+    once per pair.
+    """
+    if type(a) is not type(b):
+        return False
+    if not isinstance(a, (dict, list)):
+        return bool(a == b)
+    seen = set() if seen is None else seen
+    pair = (id(a), id(b))
+    if pair in seen:
+        return True
+    seen.add(pair)
+    if isinstance(a, list):
+        return len(a) == len(b) and all(_same(x, y, seen) for x, y in zip(a, b))
+    if {(type(k), k) for k in a} != {(type(k), k) for k in b}:
+        return False
+    return all(_same(value, b[key], seen) for key, value in a.items())
+
+
 def _compare_settings(
-    canonical: dict[str, Any], legacy: dict[str, Any], prefix: str = ""
+    canonical: dict[Any, Any], legacy: dict[Any, Any], prefix: str = ""
 ) -> tuple[list[str], list[str]]:
     """Dotted names of settings only in *legacy*, and of those set differently."""
     missing: list[str] = []
@@ -594,17 +653,77 @@ def _compare_settings(
             more, other = _compare_settings(canonical[key], value, name + ".")
             missing += more
             differ += other
-        elif canonical[key] != value:
+        elif not _same(canonical[key], value):
             differ.append(name)
     return missing, differ
 
 
-def _add_missing(canonical: dict[str, Any], legacy: dict[str, Any]) -> None:
+def _with_missing(canonical: dict[Any, Any], legacy: dict[Any, Any]) -> dict[Any, Any]:
+    """*canonical* plus the settings only *legacy* has, canonical values winning.
+
+    Builds new mappings along every path it extends and changes neither
+    argument, so a mapping YAML anchors share between two keys is never written
+    through one key into the other.
+    """
+    out = dict(canonical)
     for key, value in legacy.items():
         if key not in canonical:
-            canonical[key] = value
+            out[key] = value
         elif isinstance(canonical[key], dict) and isinstance(value, dict):
-            _add_missing(canonical[key], value)
+            out[key] = _with_missing(canonical[key], value)
+    return out
+
+
+def _uses_references(text: str) -> bool:
+    """True when *text* has YAML anchors, aliases, merge keys or tags (or cannot be scanned).
+
+    A rewrite cannot keep these: PyYAML renames anchors, re-shares only what is
+    shared after the merge and expands merge keys. Such a file is only appended to.
+    """
+    import yaml
+
+    try:
+        for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, (yaml.AnchorToken, yaml.AliasToken, yaml.TagToken)):
+                return True
+            if isinstance(token, yaml.ScalarToken) and token.value == "<<":
+                return True
+    except yaml.YAMLError:
+        return True
+    return False
+
+
+def _merged_text(
+    text: str, canonical: dict[Any, Any], legacy: dict[Any, Any], missing: list[str]
+) -> tuple[Optional[str], bool]:
+    """New text for the canonical ``config.yaml``, and whether it is a full rewrite.
+
+    The result must parse to exactly the canonical settings plus the missing
+    legacy ones. Appending whole missing sections keeps the file's comments and
+    layout, so it is tried first; a plain rewrite follows, unless the file uses
+    anchors, aliases or merge keys. Whichever is tried is parsed back and
+    compared before it is used. ``(None, False)`` when neither holds every
+    setting: the caller keeps the canonical file as it is.
+    """
+    import yaml
+
+    expected = _with_missing(canonical, legacy)
+    top = [k for k in legacy if k not in canonical]
+    tries: list[tuple[str, bool]] = []
+    try:
+        if len(top) == len(missing):
+            head = text if not text or text.endswith("\n") else text + "\n"
+            chunk = yaml.safe_dump({k: legacy[k] for k in top}, sort_keys=False)
+            tries.append((head + chunk, False))
+        if not _uses_references(text):
+            tries.append((yaml.safe_dump(expected, sort_keys=False), True))
+    except yaml.YAMLError:
+        pass  # a value safe_dump cannot write: nothing written is tried
+    for candidate, rewrite in tries:
+        merged = _parse_mapping(candidate)
+        if merged is not None and _same(merged, expected):
+            return candidate, rewrite
+    return None, False
 
 
 def shadowed_settings(legacy: Path, canonical: Path) -> list[str]:
@@ -613,8 +732,11 @@ def shadowed_settings(legacy: Path, canonical: Path) -> list[str]:
     Only the canonical file is read once both exist, so these are ignored.
     Empty when either file is missing or does not parse.
     """
-    old = _load_mapping(legacy / _CONFIG) if (legacy / _CONFIG).is_file() else None
-    new = _load_mapping(canonical / _CONFIG) if (canonical / _CONFIG).is_file() else None
+    from tokenpak import _paths
+
+    name = _paths.CONFIG_CANONICAL
+    old = _load_mapping(legacy / name) if (legacy / name).is_file() else None
+    new = _load_mapping(canonical / name) if (canonical / name).is_file() else None
     if old is None or new is None:
         return []
     return _compare_settings(new, old)[0]
@@ -625,20 +747,55 @@ def _preview(names: list[str], limit: int = 3) -> str:
     return shown + (f" and {len(names) - limit} more" if len(names) > limit else "")
 
 
+def _is_link(path: Path) -> bool:
+    """A symbolic link, or a file with more than one hard link."""
+    try:
+        return path.is_symlink() or path.stat().st_nlink > 1
+    except OSError:
+        return True
+
+
 def _merge_config(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Optional[Item]:
     """Add settings only the legacy ``config.yaml`` has; canonical values always win.
 
     Returns ``None`` when either file does not parse, or when nothing is missing
     but values differ, so the caller keeps the legacy copy beside the canonical one.
+    A canonical file that is a link, or whose settings no write would keep exactly,
+    is kept as it is with the legacy copy beside it, and the item stays unresolved.
     """
     old = _load_mapping(src)
-    new = _load_mapping(dest)
+    try:
+        text = dest.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    new = _parse_mapping(text)
     if old is None or new is None:
         return None
     missing, differ = _compare_settings(new, old)
     if not missing:
         return None if differ else Item(rel, SKIP_IDENTICAL, "same settings")
-    detail = f"{len(missing)} {_plural(len(missing), 'setting')} added: {_preview(missing)}"
+    count = f"{len(missing)} {_plural(len(missing), 'setting')}"
+    if _is_link(dest):
+        # Replacing the file would turn the link into a regular file and detach
+        # the config it points at; writing through it would change that config.
+        return _keep_beside(
+            src, dest, rel, ctx, kept=f"{count} not added: canonical is a link, kept as it is"
+        )
+    merged, rewrite = _merged_text(text, new, old, missing)
+    if merged is None:
+        return _keep_beside(
+            src,
+            dest,
+            rel,
+            ctx,
+            kept=(
+                f"{count} not added ({_preview(missing)}): this file's anchors, aliases "
+                "or form cannot take them without changing other settings; canonical kept"
+            ),
+        )
+    detail = f"{count} added: {_preview(missing)}"
+    if rewrite:
+        detail += " (file rewritten as plain YAML; comments are not kept)"
     side_name = ""
     if differ:
         side = dest.with_name(dest.name + _LEGACY_SUFFIX)
@@ -648,21 +805,9 @@ def _merge_config(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Optional[Item]:
             _backup(side, ctx)
             _copy_file(src, side, ctx)
     if ctx.apply:
-        import yaml
-
         _backup(dest, ctx)
-        top = [k for k in old if k not in new]
-        if len(top) == len(missing):
-            # Whole sections only: append them so the file's comments are kept.
-            text = dest.read_text(encoding="utf-8")
-            if text and not text.endswith("\n"):
-                text += "\n"
-            text += yaml.safe_dump({k: old[k] for k in top}, sort_keys=False)
-        else:
-            _add_missing(new, old)
-            text = yaml.safe_dump(new, sort_keys=False)
         tmp = dest.with_name(f".{dest.name}.migrate-tmp")
-        tmp.write_text(text, encoding="utf-8")
+        tmp.write_text(merged, encoding="utf-8")
         os.chmod(tmp, _private_mode(dest))
         os.replace(tmp, dest)
     return Item(rel, MERGE, detail, len(missing), side=side_name, unresolved=bool(differ))

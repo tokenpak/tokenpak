@@ -816,7 +816,7 @@ def run_doctor(
         _record(
             "home_boundary",
             "warn",
-            f"~/.tpk/ boundary    migration incomplete: {count}",
+            f"~/{_paths.CANONICAL_DIRNAME}/ boundary    migration incomplete: {count}",
             detail=(
                 f"The migration on {when} left items unresolved{example}, so "
                 f"{_paths.legacy_home()} may still hold the only copy of some data. Keep it. "
@@ -882,8 +882,8 @@ def run_doctor(
                 f"Both {_paths.canonical_home()} and "
                 f"{_paths.legacy_home()} exist. Canonical wins. "
                 "Run `tokenpak home migrate` to see whether the legacy directory "
-                "holds anything ~/.tpk/ lacks, and keep it until a migration has "
-                "finished with nothing unresolved."
+                f"holds anything ~/{_paths.CANONICAL_DIRNAME}/ lacks, and keep it until "
+                "a migration has finished with nothing unresolved."
             ),
         )
     else:
@@ -900,9 +900,10 @@ def run_doctor(
         from tokenpak.cli.commands.home_migrate import shadowed_settings
 
         shadowed = shadowed_settings(_paths.legacy_home(), _paths.canonical_home())
+        config_name = _paths.CONFIG_CANONICAL
         if shadowed and (
             not _paths.is_migrated_home()
-            or "config.yaml" in _paths.legacy_written_since_migration(limit=1000)
+            or config_name in _paths.legacy_written_since_migration(limit=1000)
         ):
             names = ", ".join(shadowed[:5]) + (
                 f" and {len(shadowed) - 5} more" if len(shadowed) > 5 else ""
@@ -910,9 +911,9 @@ def run_doctor(
             _record(
                 "home_config",
                 "warn",
-                f"Ignored settings    {len(shadowed)} only in {_paths.legacy_home()}/config.yaml",
+                f"Ignored settings    {len(shadowed)} only in {_paths.legacy_home() / config_name}",
                 detail=(
-                    f"Only {_paths.canonical_home()}/config.yaml is read, so these are "
+                    f"Only {_paths.canonical_home() / config_name} is read, so these are "
                     f"not in effect: {names}. Run `tokenpak home migrate` to see the "
                     "plan, then `tokenpak home migrate --apply` to add them."
                 ),

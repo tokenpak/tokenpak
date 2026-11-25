@@ -1064,3 +1064,344 @@ def test_incomplete_receipt_outranks_legacy_active_guidance(homes, capsys):
     assert "migration incomplete" in row["message"] and "monitor.db" in row["detail"]
     assert "absent" not in row["detail"]  # not the "canonical home is absent" advisory
     _assert_keeps_legacy(row)
+
+
+# --------------------------------------------------------------------------
+# config.yaml merge invariants, for every input:
+#   * a config file the migration writes still parses, and holds every setting
+#     the canonical file held plus every legacy-only setting at its own path;
+#   * a write through a shared YAML anchor or alias never changes another key;
+#   * a destination link (symbolic, hard or broken) is never replaced;
+#   * a first and a second apply report the same outcome, and doctor never says
+#     migrated while a legacy setting is not in the canonical file.
+# --------------------------------------------------------------------------
+
+_ABSENT = object()
+_PLAIN_LEGACY = "base: 1\nlegacy_only: preserved\n"
+
+
+def _settings(data, prefix=()):
+    """``(path, value)`` for every setting in a parsed config; a mapping is a path."""
+    if not isinstance(data, dict):
+        return
+    for key, value in data.items():
+        if isinstance(value, dict) and value:
+            yield from _settings(value, prefix + (key,))
+        else:
+            yield prefix + (key,), value
+
+
+def _setting(data, path):
+    for key in path:
+        if not isinstance(data, dict) or key not in data:
+            return _ABSENT
+        data = data[key]
+    return data
+
+
+def _yaml_or_none(text):
+    import yaml
+
+    try:
+        return yaml.safe_load(text)
+    except yaml.YAMLError:
+        return None
+
+
+def _apply_config_twice(capsys, legacy, canonical):
+    """Apply twice, checking the config.yaml invariants after each apply.
+
+    Returns the two exit codes, the two outcomes and the two config.yaml items.
+    Values are compared by ``repr`` so ``1``, ``1.0`` and ``True`` stay distinct.
+    """
+    import yaml
+
+    config = canonical / "config.yaml"
+    legacy_text = (legacy / "config.yaml").read_text()
+    old = yaml.safe_load(legacy_text) or {}
+    before_text = config.read_text() if config.is_file() else None
+    before = _yaml_or_none(before_text) if before_text is not None else None
+    codes, outcomes, items = [], [], []
+    for _ in range(2):
+        codes.append(run(apply=True, as_json=True))
+        report = json.loads(capsys.readouterr().out)
+        outcomes.append(report["outcome"])
+        items.append(next(i for i in report["items"] if i["path"] == "config.yaml"))
+        text = config.read_text() if config.is_file() else None
+        if text != before_text:
+            after = yaml.safe_load(text)  # what was written parses
+            assert isinstance(after, dict)
+            for path, value in _settings(before):  # every canonical setting is kept
+                assert repr(_setting(after, path)) == repr(value), path
+            for path, value in _settings(old):  # every added setting has its own value
+                if _setting(before, path) is _ABSENT:
+                    assert repr(_setting(after, path)) == repr(value), path
+            for path, value in _settings(after):  # and nothing arrives at another path
+                assert repr(value) in (repr(_setting(before, path)), repr(_setting(old, path)))
+        final = _yaml_or_none(text) if text is not None else None
+        unmigrated = [p for p, v in _settings(old) if repr(_setting(final, p)) != repr(v)]
+        if report["outcome"] == "complete":
+            assert unmigrated == [] and report["unresolved"] == []
+        else:
+            entry = {u["path"]: u for u in report["unresolved"]}["config.yaml"]
+            if entry["legacy_copy"]:
+                assert (canonical / entry["legacy_copy"]).read_text() == legacy_text
+        row = _doctor_row(capsys, "home_boundary")
+        if unmigrated:
+            assert row["status"] == "warn" and "migrated on" not in row["message"]
+        else:
+            assert row["status"] == "pass" and "migrated on" in row["message"]
+    assert codes[0] == codes[1] and outcomes[0] == outcomes[1]  # the outcome is stable
+    return codes, outcomes, items
+
+
+@pytest.mark.parametrize(
+    "canonical_text, legacy_text, outcome",
+    [
+        pytest.param("---\nbase: 1\n...\n", _PLAIN_LEGACY, "complete", id="document-end-marker"),
+        pytest.param("--- {base: 1}\n", _PLAIN_LEGACY, "complete", id="document-start-marker"),
+        pytest.param('{"base": 1}\n', _PLAIN_LEGACY, "complete", id="flow-mapping"),
+        pytest.param(
+            "msg: |\n  hi", "msg: hi\nlegacy_only: preserved\n", "complete", id="no-final-newline"
+        ),
+        pytest.param("~\n", "legacy_only: preserved\n", "complete", id="null-document"),
+        pytest.param("---\n...\n", "legacy_only: preserved\n", "complete", id="empty-document"),
+        pytest.param("[]\n", "legacy_only: preserved\n", "incomplete", id="not-a-mapping"),
+    ],
+)
+def test_config_merge_never_corrupts_valid_yaml(
+    homes, capsys, canonical_text, legacy_text, outcome
+):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, legacy_text, canonical_text)
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert outcomes == [outcome, outcome]
+    if outcome == "incomplete":
+        assert codes == [EXIT_FAILURE, EXIT_FAILURE]
+        assert (canonical / "config.yaml").read_text() == canonical_text
+        assert (canonical / "config.yaml.legacy").read_text() == legacy_text
+    else:
+        assert codes == [0, 0] and items[0]["action"] == "MERGE"
+        assert not (canonical / "config.yaml.legacy").exists()
+
+
+@pytest.mark.parametrize(
+    "canonical_text, outcome, kept",
+    [
+        pytest.param("---\nbase: 1\n", "complete", "---\nbase: 1\n", id="document-start-block"),
+        pytest.param("base: 1\n---\nother: 2\n", "incomplete", None, id="more-than-one-document"),
+        pytest.param("base: 1", "complete", "base: 1\n", id="no-final-newline-plain"),
+        pytest.param("", "complete", "", id="empty-file"),
+        pytest.param("# mine\n", "complete", "# mine\n", id="comment-only"),
+    ],
+)
+def test_config_merge_forms_that_take_an_append_or_are_kept(
+    homes, capsys, canonical_text, outcome, kept
+):
+    legacy, canonical = homes
+    legacy_text = _PLAIN_LEGACY
+    _config_fixture(legacy, canonical, legacy_text, canonical_text)
+    _, outcomes, _ = _apply_config_twice(capsys, legacy, canonical)
+    assert outcomes == [outcome, outcome]
+    text = (canonical / "config.yaml").read_text()
+    if kept is None:  # not one document: kept as it is, legacy copy beside it
+        assert text == canonical_text
+        assert (canonical / "config.yaml.legacy").read_text() == legacy_text
+    else:  # appended, so the file's own lines (and comments) are kept
+        assert text.startswith(kept) and text.endswith("legacy_only: preserved\n")
+
+
+@pytest.mark.parametrize(
+    "canonical_text, legacy_text",
+    [
+        pytest.param(
+            "a: &shared\n  x: 1\nb: *shared\n",
+            "a:\n  x: 1\n  y: 2\nb:\n  x: 1\n  y: 3\n",
+            id="alias-to-mapping",
+        ),
+        pytest.param(
+            "tags: &t [a]\nmore: *t\nsub:\n  k: 1\n",
+            "tags: [a]\nmore: [a]\nsub:\n  k: 1\n  n: 2\n",
+            id="alias-to-sequence",
+        ),
+        pytest.param(
+            "base: &b\n  x: 1\nlist:\n- *b\n",
+            "base:\n  x: 1\n  y: 2\nlist:\n- x: 1\n",
+            id="alias-inside-sequence",
+        ),
+        pytest.param(
+            "base: &b\n  sub:\n    x: 1\nchild:\n  <<: *b\n",
+            "base:\n  sub:\n    x: 1\nchild:\n  sub:\n    x: 1\n    y: 2\n",
+            id="merge-key",
+        ),
+        pytest.param(
+            "outer: &o\n  inner: &i\n    x: 1\ncopy: *o\nother: *i\n",
+            "outer:\n  inner:\n    x: 1\n    y: 2\ncopy:\n  inner:\n    x: 1\nother:\n  x: 1\n",
+            id="nested-aliases",
+        ),
+    ],
+)
+def test_config_merge_never_writes_through_shared_yaml_nodes(
+    homes, capsys, canonical_text, legacy_text
+):
+    legacy, canonical = homes
+    _config_fixture(legacy, canonical, legacy_text, canonical_text)
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [EXIT_FAILURE, EXIT_FAILURE] and outcomes == ["incomplete", "incomplete"]
+    assert (canonical / "config.yaml").read_text() == canonical_text
+    assert (canonical / "config.yaml.legacy").read_text() == legacy_text
+    assert items[0]["action"] == "CONFLICT" and "not added" in items[0]["detail"]
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn" and "migration incomplete" in row["message"]
+
+
+def test_config_with_anchors_still_takes_whole_missing_sections(homes, capsys):
+    legacy, canonical = homes
+    canonical_text = "# mine\na: &shared\n  x: 1\nb: *shared\n"
+    _config_fixture(
+        legacy, canonical, "a:\n  x: 1\nb:\n  x: 1\nextra:\n  enabled: true\n", canonical_text
+    )
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [0, 0] and outcomes == ["complete", "complete"]
+    assert items[0]["action"] == "MERGE" and "1 setting added: extra" in items[0]["detail"]
+    assert (canonical / "config.yaml").read_text().startswith(canonical_text)
+
+
+def test_config_setting_counts_only_when_its_own_value_arrives(homes, capsys):
+    legacy, canonical = homes
+    _config_fixture(
+        legacy, canonical, "retries: true\nratio: 1.0\nextra: 2\n", "retries: 1\nratio: 1\n"
+    )
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [EXIT_FAILURE, EXIT_FAILURE] and outcomes == ["incomplete", "incomplete"]
+    assert (
+        items[0]["action"] == "MERGE" and "canonical kept for retries, ratio" in items[0]["detail"]
+    )
+    assert (canonical / "config.yaml.legacy").read_text() == (legacy / "config.yaml").read_text()
+
+
+def _managed_config(tmp_path, text):
+    managed = tmp_path / "managed"
+    managed.mkdir(exist_ok=True)
+    (managed / "dest.yaml").write_text(text)
+    return managed / "dest.yaml"
+
+
+@pytest.mark.parametrize("through_directory_link", [False, True], ids=["file-link", "dir-link"])
+def test_config_symlink_is_kept_as_that_link(homes, tmp_path, capsys, through_directory_link):
+    legacy, canonical = homes
+    target = _managed_config(tmp_path, "base: 1\n")
+    (legacy / "config.yaml").write_text("base: 1\nmissing: added\n")
+    canonical.mkdir()
+    link = "../managed/dest.yaml"
+    if through_directory_link:  # the link reaches the managed file through a linked directory
+        os.symlink(str(target.parent), tmp_path / "linked-dir")
+        link = str(tmp_path / "linked-dir" / "dest.yaml")
+    os.symlink(link, canonical / "config.yaml")
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [EXIT_FAILURE, EXIT_FAILURE] and outcomes == ["incomplete", "incomplete"]
+    assert os.readlink(canonical / "config.yaml") == link  # still the same link
+    assert target.read_text() == "base: 1\n"  # and nothing written through it
+    assert (canonical / "config.yaml.legacy").read_text() == "base: 1\nmissing: added\n"
+    assert "canonical is a link" in items[0]["detail"]
+
+
+def test_config_symlink_to_a_directory_is_kept(homes, tmp_path, capsys):
+    legacy, canonical = homes
+    (legacy / "config.yaml").write_text("base: 1\n")
+    canonical.mkdir()
+    (tmp_path / "a-directory").mkdir()
+    os.symlink(str(tmp_path / "a-directory"), canonical / "config.yaml")
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [EXIT_FAILURE, EXIT_FAILURE] and outcomes == ["incomplete", "incomplete"]
+    assert os.readlink(canonical / "config.yaml") == str(tmp_path / "a-directory")
+    assert items[0]["action"] == "CONFLICT"
+
+
+def test_config_hard_link_is_not_detached(homes, tmp_path, capsys):
+    legacy, canonical = homes
+    target = _managed_config(tmp_path, "base: 1\n")
+    (legacy / "config.yaml").write_text("base: 1\nmissing: added\n")
+    canonical.mkdir()
+    os.link(target, canonical / "config.yaml")
+    codes, outcomes, items = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [EXIT_FAILURE, EXIT_FAILURE] and outcomes == ["incomplete", "incomplete"]
+    assert os.path.samefile(target, canonical / "config.yaml")
+    assert target.read_text() == "base: 1\n"
+    assert "canonical is a link" in items[0]["detail"]
+
+
+def test_canonical_home_link_stays_a_link_and_takes_the_merge(homes, tmp_path, capsys):
+    import yaml
+
+    legacy, canonical = homes
+    real = tmp_path / "real-home"
+    real.mkdir()
+    os.symlink(str(real), canonical)
+    (legacy / "config.yaml").write_text("base: 1\nmissing: added\n")
+    (real / "config.yaml").write_text("base: 1\n")
+    codes, outcomes, _ = _apply_config_twice(capsys, legacy, canonical)
+    assert codes == [0, 0] and outcomes == ["complete", "complete"]
+    assert os.readlink(canonical) == str(real)
+    assert yaml.safe_load((real / "config.yaml").read_text()) == {"base": 1, "missing": "added"}
+
+
+@pytest.mark.parametrize("name", ["config.yaml", "fleet.yaml", "monitor.db"])
+def test_broken_destination_link_is_never_replaced(homes, tmp_path, capsys, name):
+    legacy, canonical = homes
+    if name.endswith(".db"):
+        make_db(legacy / name, LEDGER, [(LEDGER_ROW, ("a", 1))])
+    else:
+        (legacy / name).write_text("base: 1\nmissing: added\n")
+    canonical.mkdir()
+    gone = str(tmp_path / "gone" / name)
+    os.symlink(gone, canonical / name)
+    for _ in range(2):
+        assert run(apply=True, as_json=True) == EXIT_FAILURE
+        report = json.loads(capsys.readouterr().out)
+        assert report["outcome"] == "incomplete"
+        entry = {u["path"]: u for u in report["unresolved"]}[name]
+        assert "broken symbolic link" in entry["detail"]
+        assert os.readlink(canonical / name) == gone and not os.path.lexists(gone)
+    side = canonical / f"{name}.legacy"
+    if name.endswith(".db"):
+        assert not side.exists()  # nothing copied; the legacy home keeps the only copy
+    else:
+        assert side.read_text() == (legacy / name).read_text()
+    row = _boundary_row(capsys)
+    assert row["status"] == "warn" and "migration incomplete" in row["message"]
+
+
+def test_doctor_boundary_text_follows_the_canonical_dirname(tmp_path, monkeypatch, capsys):
+    from tokenpak import _paths
+
+    monkeypatch.delenv("TOKENPAK_HOME", raising=False)
+    monkeypatch.setattr(Path, "home", lambda: tmp_path)
+    monkeypatch.setattr(home_migrate, "busy_reasons", lambda *a, **k: [])
+    monkeypatch.setattr(_paths, "CANONICAL_DIRNAME", ".tpk-next")
+    legacy = tmp_path / _paths.LEGACY_DIRNAME
+    canonical = tmp_path / ".tpk-next"
+    legacy.mkdir()
+    canonical.mkdir()
+    _file_conflict(legacy, canonical)
+    assert run(apply=True) == EXIT_FAILURE
+    row = _boundary_row(capsys)
+    assert row["message"].startswith("~/.tpk-next/ boundary")
+    assert "migration incomplete" in row["message"]
+
+
+def test_config_merge_follows_the_canonical_config_name(homes, monkeypatch, capsys):
+    import yaml
+
+    from tokenpak import _paths
+
+    legacy, canonical = homes
+    monkeypatch.setattr(_paths, "CONFIG_CANONICAL", "fleet.yaml")
+    (legacy / "fleet.yaml").write_text("who: me\nextra: 1\n")
+    canonical.mkdir()
+    (canonical / "fleet.yaml").write_text("who: me\n")
+    row = _doctor_row(capsys, "home_config")
+    assert row and "extra" in row["detail"] and "fleet.yaml" in row["message"]
+    assert run(apply=True) == 0
+    assert yaml.safe_load((canonical / "fleet.yaml").read_text()) == {"who": "me", "extra": 1}
+    assert not (canonical / "fleet.yaml.legacy").exists()
