@@ -21,6 +21,11 @@ Rules, in one place:
 * Every target file is backed up under ``<canonical>/backups/home-migrate-<utc>/``
   immediately before it is first modified.
 * The default is a dry run. ``--apply`` writes, and only while TokenPak is idle.
+* Only a clean apply is a finished migration. Any conflict (or a merge that kept
+  differing canonical values) leaves the run incomplete: it exits non-zero, says
+  which legacy data was not carried over, and records that in the receipt.
+  Any earlier receipt is removed before an apply starts, so a run that stops
+  part-way cannot leave an old success standing.
 """
 
 from __future__ import annotations
@@ -57,6 +62,12 @@ _BATCH = 5000
 _LICENSE = "license.json"
 _LEGACY_SUFFIX = ".legacy"
 
+#: ``outcome`` in the JSON report. Only ``complete`` is a finished migration.
+OUTCOME_PLANNED = "planned"
+OUTCOME_COMPLETE = "complete"
+OUTCOME_INCOMPLETE = "incomplete"  # applied, but items still need the user
+OUTCOME_UNRECORDED = "unrecorded"  # merged cleanly, but the receipt was not written
+
 
 class _Busy(Exception):
     """Something is using TokenPak or a target database right now."""
@@ -70,6 +81,15 @@ class Item:
     action: str
     detail: str = ""
     rows: int = 0
+    #: Name of the ``.legacy`` copy kept beside the canonical file, when there is one.
+    side: str = ""
+    #: Something here still needs the user. Always true for a conflict; also set
+    #: for a merge that kept differing canonical values.
+    unresolved: bool = False
+
+    def __post_init__(self) -> None:
+        if self.action == CONFLICT:
+            self.unresolved = True
 
     def as_dict(self) -> dict[str, Any]:
         return {"path": self.path, "action": self.action, "detail": self.detail, "rows": self.rows}
@@ -364,7 +384,7 @@ def _virtual_table_db(snap: Path, dest: Path, rel: str, ctx: _Ctx, same: bool) -
     side = dest.with_name(dest.name + _LEGACY_SUFFIX)
     detail = f"{_VIRTUAL}; canonical kept, legacy copy beside it as {side.name}"
     if side.exists() and _is_sqlite_content(side) and _digest_path(side) == _digest_path(snap):
-        return Item(rel, CONFLICT, detail)
+        return Item(rel, CONFLICT, detail, side=side.name)
     if ctx.apply:
         _backup(side, ctx)
         reader = sqlite3.connect(str(snap))
@@ -379,7 +399,7 @@ def _virtual_table_db(snap: Path, dest: Path, rel: str, ctx: _Ctx, same: bool) -
             reader.close()
         os.chmod(tmp, 0o600)
         os.replace(tmp, side)
-    return Item(rel, CONFLICT, detail)
+    return Item(rel, CONFLICT, detail, side=side.name)
 
 
 def _is_sqlite_content(path: Path) -> bool:
@@ -489,10 +509,21 @@ def _copy_file(src: Path, dest: Path, ctx: _Ctx, *, force_private: bool = False)
     os.replace(tmp, dest)
 
 
+_BROKEN_LINK = "canonical entry is a broken symbolic link"
+
+
 def _process_file(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
+    from tokenpak import _paths
+
     name = src.name
     if name.endswith(".log"):
         return Item(rel, SKIP_LOG, "logs are not carried over")
+    if dest.is_symlink() and not dest.exists():
+        # A broken link is still the user's entry. Writing to its path would
+        # replace it with a regular file and detach whatever it is meant to name.
+        if _is_sqlite(src):
+            return Item(rel, CONFLICT, f"{_BROKEN_LINK}; nothing copied")
+        return _keep_beside(src, dest, rel, ctx, kept=f"{_BROKEN_LINK}, kept as it is")
     if _is_sqlite(src):
         return _process_sqlite(src, dest, rel, ctx)
     is_license = rel == _LICENSE
@@ -507,14 +538,28 @@ def _process_file(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
         return Item(rel, SKIP_CANONICAL, "canonical license kept")
     if name.endswith(".jsonl"):
         return _merge_lines(src, dest, rel, ctx)
+    if rel == _paths.CONFIG_CANONICAL:
+        merged = _merge_config(src, dest, rel, ctx)
+        if merged is not None:
+            return merged
+    return _keep_beside(src, dest, rel, ctx)
+
+
+def _keep_beside(
+    src: Path, dest: Path, rel: str, ctx: _Ctx, *, kept: str = "canonical kept"
+) -> Item:
+    """Leave the canonical entry exactly as it is and save the legacy file beside it.
+
+    The item stays unresolved: the user decides what, if anything, to carry over.
+    """
     side = dest.with_name(dest.name + _LEGACY_SUFFIX)
-    detail = f"canonical kept; legacy copy beside it as {side.name}"
+    detail = f"{kept}; legacy copy beside it as {side.name}"
     if side.exists() and filecmp.cmp(src, side, shallow=False):
-        return Item(rel, CONFLICT, detail)
+        return Item(rel, CONFLICT, detail, side=side.name)
     if ctx.apply:
         _backup(side, ctx)
         _copy_file(src, side, ctx)
-    return Item(rel, CONFLICT, detail)
+    return Item(rel, CONFLICT, detail, side=side.name)
 
 
 def _merge_lines(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
@@ -535,6 +580,237 @@ def _merge_lines(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
                 handle.write(b"\n")
             handle.write(("\n".join(new) + "\n").encode("utf-8"))
     return Item(rel, MERGE, f"{len(new)} new {_plural(len(new), 'line')}", len(new))
+
+
+# --------------------------------------------------------------------------
+# config.yaml: settings merge
+# --------------------------------------------------------------------------
+
+
+def _parse_mapping(text: str) -> Optional[dict[Any, Any]]:
+    """The settings in one YAML document, or ``None`` when *text* is not exactly that.
+
+    An empty, comment-only or null document holds no settings. Anything else
+    that is not a single mapping (a list, a scalar, several documents, invalid
+    YAML) is ``None``.
+    """
+    try:
+        import yaml
+    except ImportError:
+        return None
+    try:
+        data = yaml.safe_load(text)
+    except (ValueError, yaml.YAMLError):
+        return None
+    if data is None:
+        return {}
+    return data if isinstance(data, dict) else None
+
+
+def _load_mapping(path: Path) -> Optional[dict[Any, Any]]:
+    """:func:`_parse_mapping` of a file, or ``None`` when it cannot be read."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    return _parse_mapping(text)
+
+
+def _same(a: Any, b: Any, seen: Optional[set[tuple[int, int]]] = None) -> bool:
+    """Equal values of the same types: ``1`` is not ``True`` or ``1.0`` here.
+
+    A setting is carried over only when its own value arrives, not one that
+    merely compares equal. Mappings and lists YAML anchors share are compared
+    once per pair.
+    """
+    if type(a) is not type(b):
+        return False
+    if not isinstance(a, (dict, list)):
+        return bool(a == b)
+    seen = set() if seen is None else seen
+    pair = (id(a), id(b))
+    if pair in seen:
+        return True
+    seen.add(pair)
+    if isinstance(a, list):
+        return len(a) == len(b) and all(_same(x, y, seen) for x, y in zip(a, b))
+    if {(type(k), k) for k in a} != {(type(k), k) for k in b}:
+        return False
+    return all(_same(value, b[key], seen) for key, value in a.items())
+
+
+def _compare_settings(
+    canonical: dict[Any, Any], legacy: dict[Any, Any], prefix: str = ""
+) -> tuple[list[str], list[str]]:
+    """Dotted names of settings only in *legacy*, and of those set differently."""
+    missing: list[str] = []
+    differ: list[str] = []
+    for key, value in legacy.items():
+        name = f"{prefix}{key}"
+        if key not in canonical:
+            missing.append(name)
+        elif isinstance(canonical[key], dict) and isinstance(value, dict):
+            more, other = _compare_settings(canonical[key], value, name + ".")
+            missing += more
+            differ += other
+        elif not _same(canonical[key], value):
+            differ.append(name)
+    return missing, differ
+
+
+def _with_missing(canonical: dict[Any, Any], legacy: dict[Any, Any]) -> dict[Any, Any]:
+    """*canonical* plus the settings only *legacy* has, canonical values winning.
+
+    Builds new mappings along every path it extends and changes neither
+    argument, so a mapping YAML anchors share between two keys is never written
+    through one key into the other.
+    """
+    out = dict(canonical)
+    for key, value in legacy.items():
+        if key not in canonical:
+            out[key] = value
+        elif isinstance(canonical[key], dict) and isinstance(value, dict):
+            out[key] = _with_missing(canonical[key], value)
+    return out
+
+
+def _uses_references(text: str) -> bool:
+    """True when *text* has YAML anchors, aliases, merge keys or tags (or cannot be scanned).
+
+    A rewrite cannot keep these: PyYAML renames anchors, re-shares only what is
+    shared after the merge and expands merge keys. Such a file is only appended to.
+    """
+    import yaml
+
+    try:
+        for token in yaml.scan(text, Loader=yaml.SafeLoader):
+            if isinstance(token, (yaml.AnchorToken, yaml.AliasToken, yaml.TagToken)):
+                return True
+            if isinstance(token, yaml.ScalarToken) and token.value == "<<":
+                return True
+    except yaml.YAMLError:
+        return True
+    return False
+
+
+def _merged_text(
+    text: str, canonical: dict[Any, Any], legacy: dict[Any, Any], missing: list[str]
+) -> tuple[Optional[str], bool]:
+    """New text for the canonical ``config.yaml``, and whether it is a full rewrite.
+
+    The result must parse to exactly the canonical settings plus the missing
+    legacy ones. Appending whole missing sections keeps the file's comments and
+    layout, so it is tried first; a plain rewrite follows, unless the file uses
+    anchors, aliases or merge keys. Whichever is tried is parsed back and
+    compared before it is used. ``(None, False)`` when neither holds every
+    setting: the caller keeps the canonical file as it is.
+    """
+    import yaml
+
+    expected = _with_missing(canonical, legacy)
+    top = [k for k in legacy if k not in canonical]
+    tries: list[tuple[str, bool]] = []
+    try:
+        if len(top) == len(missing):
+            head = text if not text or text.endswith("\n") else text + "\n"
+            chunk = yaml.safe_dump({k: legacy[k] for k in top}, sort_keys=False)
+            tries.append((head + chunk, False))
+        if not _uses_references(text):
+            tries.append((yaml.safe_dump(expected, sort_keys=False), True))
+    except yaml.YAMLError:
+        pass  # a value safe_dump cannot write: nothing written is tried
+    for candidate, rewrite in tries:
+        merged = _parse_mapping(candidate)
+        if merged is not None and _same(merged, expected):
+            return candidate, rewrite
+    return None, False
+
+
+def shadowed_settings(legacy: Path, canonical: Path) -> list[str]:
+    """Settings in the legacy ``config.yaml`` that the canonical one lacks.
+
+    Only the canonical file is read once both exist, so these are ignored.
+    Empty when either file is missing or does not parse.
+    """
+    from tokenpak import _paths
+
+    name = _paths.CONFIG_CANONICAL
+    old = _load_mapping(legacy / name) if (legacy / name).is_file() else None
+    new = _load_mapping(canonical / name) if (canonical / name).is_file() else None
+    if old is None or new is None:
+        return []
+    return _compare_settings(new, old)[0]
+
+
+def _preview(names: list[str], limit: int = 3) -> str:
+    shown = ", ".join(names[:limit])
+    return shown + (f" and {len(names) - limit} more" if len(names) > limit else "")
+
+
+def _is_link(path: Path) -> bool:
+    """A symbolic link, or a file with more than one hard link."""
+    try:
+        return path.is_symlink() or path.stat().st_nlink > 1
+    except OSError:
+        return True
+
+
+def _merge_config(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Optional[Item]:
+    """Add settings only the legacy ``config.yaml`` has; canonical values always win.
+
+    Returns ``None`` when either file does not parse, or when nothing is missing
+    but values differ, so the caller keeps the legacy copy beside the canonical one.
+    A canonical file that is a link, or whose settings no write would keep exactly,
+    is kept as it is with the legacy copy beside it, and the item stays unresolved.
+    """
+    old = _load_mapping(src)
+    try:
+        text = dest.read_text(encoding="utf-8")
+    except (OSError, ValueError):
+        return None
+    new = _parse_mapping(text)
+    if old is None or new is None:
+        return None
+    missing, differ = _compare_settings(new, old)
+    if not missing:
+        return None if differ else Item(rel, SKIP_IDENTICAL, "same settings")
+    count = f"{len(missing)} {_plural(len(missing), 'setting')}"
+    if _is_link(dest):
+        # Replacing the file would turn the link into a regular file and detach
+        # the config it points at; writing through it would change that config.
+        return _keep_beside(
+            src, dest, rel, ctx, kept=f"{count} not added: canonical is a link, kept as it is"
+        )
+    merged, rewrite = _merged_text(text, new, old, missing)
+    if merged is None:
+        return _keep_beside(
+            src,
+            dest,
+            rel,
+            ctx,
+            kept=(
+                f"{count} not added ({_preview(missing)}): this file's anchors, aliases "
+                "or form cannot take them without changing other settings; canonical kept"
+            ),
+        )
+    detail = f"{count} added: {_preview(missing)}"
+    if rewrite:
+        detail += " (file rewritten as plain YAML; comments are not kept)"
+    side_name = ""
+    if differ:
+        side = dest.with_name(dest.name + _LEGACY_SUFFIX)
+        side_name = side.name
+        detail += f"; canonical kept for {_preview(differ)}, legacy copy beside it as {side.name}"
+        if ctx.apply and not (side.exists() and filecmp.cmp(src, side, shallow=False)):
+            _backup(side, ctx)
+            _copy_file(src, side, ctx)
+    if ctx.apply:
+        _backup(dest, ctx)
+        tmp = dest.with_name(f".{dest.name}.migrate-tmp")
+        tmp.write_text(merged, encoding="utf-8")
+        os.chmod(tmp, _private_mode(dest))
+        os.replace(tmp, dest)
+    return Item(rel, MERGE, detail, len(missing), side=side_name, unresolved=bool(differ))
 
 
 def _process_link(src: Path, dest: Path, rel: str, ctx: _Ctx) -> Item:
@@ -791,6 +1067,20 @@ def run(args: Any) -> int:
                 file=sys.stderr,
             )
             return EXIT_BUSY
+        stale = _invalidate_receipt()
+        if stale:
+            print(
+                "✗ tokenpak home migrate - could not clear the earlier migration receipt "
+                f"({stale}). Nothing was changed.\n",
+                file=sys.stderr,
+            )
+            print(
+                "  A receipt that says an earlier run finished must not outlive a run that\n"
+                f"  stops part-way. Make {_paths.migration_receipt_path()} removable, then run:\n"
+                "  tokenpak home migrate --apply",
+                file=sys.stderr,
+            )
+            return EXIT_FAILURE
     else:
         try:
             notes = busy_reasons(legacy, canonical, wait=False)
@@ -814,12 +1104,29 @@ def run(args: Any) -> int:
         return EXIT_FAILURE
 
     counts = _summary(items)
+    unresolved = [i for i in items if i.unresolved]
+    receipt_error = ""
     if apply:
         try:
-            _write_receipt(legacy, canonical, counts)
+            _write_receipt(legacy, canonical, counts, unresolved)
         except OSError as error:
-            print(f"Note: could not write the migration receipt ({error}).", file=sys.stderr)
+            receipt_error = str(error) or error.__class__.__name__
+        if unresolved:
+            outcome = OUTCOME_INCOMPLETE
+        elif receipt_error:
+            outcome = OUTCOME_UNRECORDED
+        else:
+            outcome = OUTCOME_COMPLETE
+    else:
+        outcome = OUTCOME_PLANNED
+    code = EXIT_OK if outcome in (OUTCOME_PLANNED, OUTCOME_COMPLETE) else EXIT_FAILURE
+
     if as_json:
+        if receipt_error:
+            print(
+                f"Note: could not write the migration receipt ({receipt_error}).",
+                file=sys.stderr,
+            )
         print(
             json.dumps(
                 {
@@ -829,40 +1136,131 @@ def run(args: Any) -> int:
                     "items": [i.as_dict() for i in items],
                     "summary": counts,
                     "busy": notes,
+                    "outcome": outcome,
+                    "unresolved": [_unresolved_entry(i) for i in unresolved],
+                    "receipt": ("failed" if receipt_error else "written") if apply else None,
                 },
                 indent=2,
             )
         )
-        return EXIT_OK
+        return code
 
     _print_plan(items, apply=apply, legacy=legacy, canonical=canonical)
     print()
     print("Summary: " + ", ".join(f"{n} {a}" for a, n in sorted(counts.items())))
-    if counts.get(CONFLICT):
-        print(
-            "Conflicts keep the canonical copy. Review the ones marked CONFLICT; "
-            "legacy files were copied beside the canonical ones as <name>.legacy."
-            if apply
-            else "Conflicts keep the canonical copy; --apply writes <name>.legacy beside "
-            "files that differ."
-        )
-    if apply:
-        if backup_dir is not None:
-            print(f"Backups of every changed target: {backup_dir}")
+    if not apply:
+        if unresolved:
+            print(f"\nNeeds review ({len(unresolved)}). The canonical copy is always kept.")
+            for line in _review_lines(unresolved, apply=False):
+                print(line)
+            print(
+                "\n--apply merges the rest, then reports these as not finished (exit "
+                f"{EXIT_FAILURE}) and records the migration as incomplete."
+            )
+        for note in notes:
+            print(f"\nNote: --apply would be refused right now: {note}.")
+        print("\nRe-run with --apply to write these changes.")
+        return code
+
+    if backup_dir is not None:
+        print(f"Backups of every changed target: {backup_dir}")
+    if outcome == OUTCOME_COMPLETE:
         print(
             f"\n✅ Done. {legacy} is untouched. Once you have run TokenPak from {canonical} "
             "for a while and are satisfied, you can remove the legacy home yourself;"
             "\n   this command never does."
         )
-    else:
-        for note in notes:
-            print(f"\nNote: --apply would be refused right now: {note}.")
-        print("\nRe-run with --apply to write these changes.")
-    return EXIT_OK
+        return code
+    if unresolved:
+        many = len(unresolved) != 1
+        print(
+            f"\n✗ tokenpak home migrate - not finished: {len(unresolved)} "
+            f"{_plural(len(unresolved), 'item')} still {'need' if many else 'needs'} review.\n",
+            file=sys.stderr,
+        )
+        for line in _review_lines(unresolved, apply=True):
+            print(line, file=sys.stderr)
+        print(
+            f"\n  {legacy} was not changed. Keep it; do not remove it until this "
+            "finishes cleanly.\n  Resolve each item above, then run again (it is safe to "
+            "repeat):\n  tokenpak home migrate --apply",
+            file=sys.stderr,
+        )
+        if receipt_error:
+            print(
+                f"\n  The migration receipt could not be written ({receipt_error}), so "
+                "`tokenpak doctor` cannot confirm the migration finished until a run records it.",
+                file=sys.stderr,
+            )
+        return code
+    print(
+        "\n✗ tokenpak home migrate - merged, but the migration receipt could not be "
+        f"written ({receipt_error}).\n\n  {legacy} was not changed. `tokenpak doctor` cannot "
+        "tell the migration finished until a receipt exists.\n"
+        "  Fix the cause (permissions or disk space in the canonical home), then run "
+        "again (it is safe to repeat):\n  tokenpak home migrate --apply",
+        file=sys.stderr,
+    )
+    return code
 
 
-def _write_receipt(legacy: Path, canonical: Path, counts: dict[str, int]) -> None:
-    """Record a finished ``--apply`` in the canonical home (0600, atomic)."""
+def _side_path(item: Item) -> str:
+    """Where the ``.legacy`` copy of *item* sits, relative to the canonical home."""
+    return str(Path(item.path).with_name(item.side)) if item.side else ""
+
+
+def _unresolved_entry(item: Item) -> dict[str, Any]:
+    return {"path": item.path, "detail": item.detail, "legacy_copy": _side_path(item) or None}
+
+
+def _review_lines(unresolved: list[Item], *, apply: bool) -> list[str]:
+    """Per-item guidance: what happened to the legacy data depends on the kind of item."""
+    stuck = [i for i in unresolved if not i.side]
+    beside = [i for i in unresolved if i.side]
+    lines: list[str] = []
+    if stuck:
+        lines.append(
+            f"  Nothing {'was' if apply else 'would be'} copied for these; "
+            "data unique to them remains only in the legacy home:"
+        )
+        lines += [f"    {i.path}  {i.detail}" for i in stuck]
+    if beside:
+        lines.append(
+            "  The canonical copy is kept and the legacy one is saved beside it:"
+            if apply
+            else "  The canonical copy is kept; --apply saves the legacy one beside it:"
+        )
+        lines += [f"    {i.path}  as {_side_path(i)}" for i in beside]
+    return lines
+
+
+def _invalidate_receipt() -> str:
+    """Remove an earlier receipt before ``--apply`` writes anything.
+
+    A receipt that says an earlier run finished must not outlive a run that dies
+    part-way. Returns an empty string when none remains, else the reason it could not
+    be removed.
+    """
+    from tokenpak import _paths
+
+    try:
+        _paths.migration_receipt_path().unlink()
+    except FileNotFoundError:
+        return ""
+    except OSError as error:
+        return str(error) or error.__class__.__name__
+    return ""
+
+
+def _write_receipt(
+    legacy: Path, canonical: Path, counts: dict[str, int], unresolved: list[Item]
+) -> None:
+    """Record an ``--apply`` in the canonical home (0600, atomic).
+
+    ``status`` is ``complete`` only when nothing is left unresolved; ``doctor``
+    reads it, and the unresolved items, to tell a finished migration from one
+    that still needs the user.
+    """
     from tokenpak import __version__, _paths
 
     now = time.time()
@@ -873,6 +1271,8 @@ def _write_receipt(legacy: Path, canonical: Path, counts: dict[str, int]) -> Non
         "target": str(canonical),
         "summary": counts,
         "tokenpak_version": __version__,
+        "status": "incomplete" if unresolved else "complete",
+        "unresolved": [_unresolved_entry(i) for i in unresolved],
     }
     canonical.mkdir(mode=0o700, parents=True, exist_ok=True)
     path = _paths.migration_receipt_path()
@@ -904,6 +1304,10 @@ __all__ = [
     "KEEP_LEGACY",
     "LINK",
     "MERGE",
+    "OUTCOME_COMPLETE",
+    "OUTCOME_INCOMPLETE",
+    "OUTCOME_PLANNED",
+    "OUTCOME_UNRECORDED",
     "SKIP_IDENTICAL",
     "Item",
     "add_arguments",

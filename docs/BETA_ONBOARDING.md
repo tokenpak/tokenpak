@@ -113,15 +113,27 @@ where they are). Review it. If it looks right, apply it:
 tokenpak home migrate --apply
 ```
 
-Databases are merged row by row. A file that differs keeps the `~/.tpk/`
-copy and the legacy one is saved beside it as `<name>.legacy`. Every
-file it changes is backed up first under
-`~/.tpk/backups/home-migrate-<time>/`. It refuses, and changes nothing,
-while the proxy or a companion session is in use.
+Databases are merged row by row. Every file it changes is backed up first
+under `~/.tpk/backups/home-migrate-<time>/`. It refuses, and changes
+nothing, while the proxy or a companion session is in use.
 
-A successful `--apply` leaves a small receipt, `~/.tpk/home-migrated.json`.
+Some items need review before the migration can finish:
+
+- A text or JSON file that differs keeps the `~/.tpk/` copy, and the legacy
+  one is saved beside it as `<name>.legacy`.
+- A database whose tables or columns differ from the `~/.tpk/` one is not
+  merged and nothing is copied. Rows unique to that database remain only in
+  `~/.tokenpak/`.
+
+If any item is left like this, `--apply` lists them, says the migration is not
+finished and exits with code 1. Keep `~/.tokenpak/` until you have resolved
+each item and run `tokenpak home migrate --apply` again; it is safe to repeat.
+
+A clean `--apply` leaves a small receipt, `~/.tpk/home-migrated.json`.
 `tokenpak doctor` then reports the migration instead of a split home, and
-warns again only if something writes to `~/.tokenpak/` afterwards.
+warns again only if something writes to `~/.tokenpak/` afterwards. An `--apply`
+that left items unresolved also writes the receipt, marked incomplete, and
+`tokenpak doctor` keeps warning until a later run finishes cleanly.
 
 The original `~/.tokenpak/` directory is never modified or removed.
 Remove it yourself once you've run from `~/.tpk/` for a while and are

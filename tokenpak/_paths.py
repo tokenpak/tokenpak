@@ -288,14 +288,65 @@ def read_migration_receipt() -> Optional[dict[str, Any]]:
     return data if isinstance(data, dict) else None
 
 
+#: Summary key a receipt uses for items that need review (``home_migrate.CONFLICT``).
+_RECEIPT_CONFLICT = "CONFLICT"
+
+
+def migration_unresolved(receipt: Optional[dict[str, Any]]) -> int:
+    """How many items a receipt records as still unresolved.
+
+    Receipts written before the ``unresolved`` list existed carry only the
+    per-action ``summary``; their conflict count is the best record there is.
+    """
+    if not isinstance(receipt, dict):
+        return 0
+    listed = receipt.get("unresolved")
+    summary = receipt.get("summary")
+    try:
+        conflicts = int(summary.get(_RECEIPT_CONFLICT, 0)) if isinstance(summary, dict) else 0
+    except (TypeError, ValueError):
+        conflicts = 0
+    return max(len(listed) if isinstance(listed, list) else 0, conflicts)
+
+
+def migration_receipt_complete(receipt: Optional[dict[str, Any]]) -> bool:
+    """True when *receipt* records a migration that finished with nothing unresolved.
+
+    A receipt without a ``status`` predates it and counts as finished only when
+    its summary shows no conflicts. Any status other than ``complete`` does not.
+    """
+    if not isinstance(receipt, dict):
+        return False
+    status = receipt.get("status")
+    if status is not None and status != "complete":
+        return False
+    return migration_unresolved(receipt) == 0
+
+
 def is_migrated_home() -> bool:
-    """True for a split install that ``tokenpak home migrate --apply`` has handled.
+    """True for a split install that ``tokenpak home migrate --apply`` has finished.
 
     Both homes still hold state (the legacy one is kept as a backup), and a
-    receipt says the merge ran. This does not say the legacy home is quiet: see
-    :func:`legacy_written_since_migration`.
+    receipt says the merge ran with nothing left unresolved. This does not say
+    the legacy home is quiet: see :func:`legacy_written_since_migration`. A
+    migration that left items unresolved is :func:`is_migration_incomplete`.
     """
-    return is_split_home() and read_migration_receipt() is not None
+    return is_split_home() and migration_receipt_complete(read_migration_receipt())
+
+
+def is_migration_incomplete() -> bool:
+    """True when the receipt records unresolved items and the legacy home is still there.
+
+    Deliberately not gated on :func:`is_split_home`. That asks which home reads
+    resolve to and counts only the resolver's own state files, while migration
+    also carries ledgers and other product state that do not decide it. A home
+    holding only those still has unresolved data left in the legacy tree. An
+    explicit ``TOKENPAK_HOME`` is a separate install and never has one.
+    """
+    if os.environ.get(ENV_VAR, "").strip():
+        return False
+    receipt = read_migration_receipt()
+    return receipt is not None and has_legacy() and not migration_receipt_complete(receipt)
 
 
 def legacy_written_since_migration(limit: int = 5) -> list[str]:
@@ -926,6 +977,9 @@ __all__ = [
     "needs_migration",
     "is_split_home",
     "is_migrated_home",
+    "is_migration_incomplete",
+    "migration_receipt_complete",
+    "migration_unresolved",
     "legacy_written_since_migration",
     "migration_receipt_path",
     "read_migration_receipt",
