@@ -911,9 +911,9 @@ def run_doctor(
             _record(
                 "home_config",
                 "warn",
-                f"Ignored settings    {len(shadowed)} only in {_paths.legacy_home() / config_name}",
+                f"Ignored settings    {len(shadowed)} only in {_paths.legacy_home()}/{config_name}",
                 detail=(
-                    f"Only {_paths.canonical_home() / config_name} is read, so these are "
+                    f"Only {_paths.canonical_home()}/{config_name} is read, so these are "
                     f"not in effect: {names}. Run `tokenpak home migrate` to see the "
                     "plan, then `tokenpak home migrate --apply` to add them."
                 ),
